@@ -34,7 +34,7 @@ async def periodic_upload(service: str):
     ingest = os.environ.get("LMH_BANK_INGEST_CONNECT", "tcp://127.0.0.1:5761")
     n = 0
     while True:
-        await asyncio.sleep(5)
+        await asyncio.sleep(60)
         payload = ("Result %d from %s\n" % (n, service)).encode() * 200000  # ~4MB
         did = await upload_dataset(ingest, payload, service=service, meta={"note":"demo"})
         print(f"[driver:{service}] uploaded dataset {did}")

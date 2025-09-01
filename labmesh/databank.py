@@ -6,6 +6,8 @@ from typing import Dict, Any, Optional, Tuple
 import zmq, zmq.asyncio
 
 from .util import dumps, loads
+from .util import ensure_windows_selector_loop
+ensure_windows_selector_loop()
 
 BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750")
 BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://127.0.0.1:5751")

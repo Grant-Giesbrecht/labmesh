@@ -7,6 +7,9 @@ from typing import Dict, Any, Optional
 import zmq, zmq.asyncio
 
 from .util import dumps, loads
+from .util import ensure_windows_selector_loop
+ensure_windows_selector_loop()
+
 
 RPC_BIND = os.environ.get("LMH_RPC_BIND", "tcp://*:5750")
 XSUB_BIND = os.environ.get("LMH_XSUB_BIND", "tcp://*:5751")
