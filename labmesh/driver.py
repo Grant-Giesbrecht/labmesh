@@ -83,8 +83,6 @@ class DriverAgent:
 		while True:
 			if hasattr(self.driver, "poll"):
 				st: Mapping[str, Any] = self.driver.poll()
-			elif hasattr(self.driver, "get_state"):
-				st = self.driver.get_state()
 			else:
 				st = {"service": self.service, "ts": time.time()}
 			await p.send_multipart([topic, dumps({"service": self.service, "state": dict(st)})])
