@@ -1,8 +1,8 @@
 
 import asyncio, os
-from labmesh import LabClient, DriverClient
+from labmesh import LabClient, RelayClient
 
-class PSUClient(DriverClient):
+class PSUClient(RelayClient):
     async def set_voltage(self, *, value: float):
         return await super().call("set_voltage", {"value": value})
     async def set_output(self, *, on: bool):
@@ -14,10 +14,10 @@ async def main():
     client = LabClient()
     await client.connect()
 
-    print("Services:", await client.list_services())
+    print("Services:", await client.list_global_names())
     print("Banks:", await client.list_banks())
 
-    client.on_state(lambda svc, st: print(f"[state] {svc}: {st}"))
+    client.on_state(lambda gname, st: print(f"[state] {gname}: {st}"))
     client.on_dataset(lambda info: print(f"[dataset] new {info}"))
 
     psu = await client.driver("psu-1")

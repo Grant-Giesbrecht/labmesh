@@ -29,10 +29,10 @@ def _curve_client_setup(sock: zmq.Socket):
 	if csec and cpub and spub:
 		sock.curve_secretkey = csec; sock.curve_publickey = cpub; sock.curve_serverkey = spub
 
-class DriverAgent:
+class RelayAgent:
 	"""Driver-side agent with direct RPC server and brokered events."""
-	def __init__(self, service: str, driver: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
-		self.service = service
+	def __init__(self, global_name: str, driver: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
+		self.global_name = global_name
 		self.driver = driver
 		self.rpc_bind = rpc_bind
 		self.state_interval = state_interval
@@ -48,13 +48,13 @@ class DriverAgent:
 		self.dir_req = req
 		# Try to render bind address for clients (replace * with host)
 		rpc_endpoint_public = self.rpc_bind.replace("*", "127.0.0.1")
-		await req.send(dumps({"type":"hello","role":"driver","service": self.service, "rpc_endpoint": rpc_endpoint_public}))
+		await req.send(dumps({"type":"hello","role":"driver","global_name": self.global_name, "rpc_endpoint": rpc_endpoint_public}))
 		_ = await req.recv()
 
 	async def _serve_rpc(self):
 		r = self.ctx.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.rpc_bind)
 		self.router = r
-		print(f"[driver:{self.service}] RPC at {self.rpc_bind}")
+		print(f"[driver:{self.global_name}] RPC at {self.rpc_bind}")
 		while True:
 			ident, payload = await r.recv_multipart()
 			msg = loads(payload)
@@ -78,25 +78,25 @@ class DriverAgent:
 	async def _serve_state(self):
 		p = self.ctx.socket(zmq.PUB); _curve_client_setup(p); p.connect(STATE_PUB_CONNECT)
 		self.pub = p
-		topic = f"state.{self.service}".encode("utf-8")
-		print(f"[driver:{self.service}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
+		topic = f"state.{self.global_name}".encode("utf-8")
+		print(f"[driver:{self.global_name}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
 		while True:
 			if hasattr(self.driver, "poll"):
 				st: Mapping[str, Any] = self.driver.poll()
 			else:
-				st = {"service": self.service, "ts": time.time()}
-			await p.send_multipart([topic, dumps({"service": self.service, "state": dict(st)})])
+				st = {"global_name": self.global_name, "ts": time.time()}
+			await p.send_multipart([topic, dumps({"global_name": self.global_name, "state": dict(st)})])
 			await asyncio.sleep(self.state_interval)
 
 	async def run(self):
 		await asyncio.gather(self._register(), self._serve_rpc(), self._serve_state())
 
 # Helper for dataset upload to bank (from driver code)
-async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, service: str = "unknown", meta: Optional[Dict[str, Any]]=None):
+async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, global_name: str = "unknown", meta: Optional[Dict[str, Any]]=None):
 	ctx = zmq.asyncio.Context.instance()
 	dealer = ctx.socket(zmq.DEALER); _curve_client_setup(dealer); dealer.connect(bank_ingest_endpoint)
 	did = dataset_id or uuid.uuid4().hex
-	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "service": service, "meta": meta or {}}))
+	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "global_name": global_name, "meta": meta or {}}))
 	_ = await dealer.recv()  # ack
 	CHUNK = 1_000_000
 	for i in range(0, len(dataset_bytes), CHUNK):

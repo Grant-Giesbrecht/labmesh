@@ -21,7 +21,7 @@ def _curve_client_setup(sock: zmq.Socket):
 	if csec and cpub and spub:
 		sock.curve_secretkey = csec; sock.curve_publickey = cpub; sock.curve_serverkey = spub
 
-class DriverClient:
+class RelayClient:
 	def __init__(self, rpc_endpoint: str, *, ctx: Optional[zmq.asyncio.Context]=None):
 		self.ctx = ctx or zmq.asyncio.Context.instance()
 		self.rpc_endpoint = rpc_endpoint
@@ -106,9 +106,9 @@ class LabClient:
 			t = topic.decode()
 			msg = loads(payload)
 			if t.startswith("state."):
-				svc = msg.get("service"); st = msg.get("state")
+				gname = msg.get("global_name"); st = msg.get("state")
 				for cb in list(self._state_cbs):
-					res = cb(svc, st)
+					res = cb(gname, st)
 					if asyncio.iscoroutine(res): await res
 			elif t.startswith("dataset."):
 				for cb in list(self._dataset_cbs):
@@ -132,18 +132,18 @@ class LabClient:
 					return msg.get("result")
 				raise RuntimeError(msg.get("error"))
 
-	async def list_services(self) -> list[Dict[str, str]]:
-		return await self._rpc("list_services")
+	async def list_global_names(self) -> list[Dict[str, str]]:
+		return await self._rpc("list_global_names")
 
 	async def list_banks(self) -> list[Dict[str, str]]:
 		return await self._rpc("list_banks")
 
-	async def driver(self, service: str) -> DriverClient:
-		services = await self.list_services()
-		ep = next((s["rpc_endpoint"] for s in services if s["service"] == service), None)
+	async def driver(self, global_name: str) -> RelayClient:
+		global_names = await self.list_global_names()
+		ep = next((s["rpc_endpoint"] for s in global_names if s["global_name"] == global_name), None)
 		if not ep:
-			raise RuntimeError(f"service '{service}' not found")
-		dc = DriverClient(ep, ctx=self.ctx)
+			raise RuntimeError(f"global_name '{global_name}' not found")
+		dc = RelayClient(ep, ctx=self.ctx)
 		await dc.connect()
 		return dc
 

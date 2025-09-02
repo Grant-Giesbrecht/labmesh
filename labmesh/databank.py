@@ -36,7 +36,7 @@ class DataBank:
 	"""Accepts dataset uploads and serves downloads (with checksum verification).
 
 	Upload protocol (driver -> bank):
-	  - ingest_start: {dataset_id, service, meta, size, sha256}
+	  - ingest_start: {dataset_id, global_name, meta, size, sha256}
 	  - ingest_chunk: {dataset_id, seq, eof:false} + [binary chunk]  -> bank replies {ingest_ack_chunk, next_seq}
 	  - ingest_chunk eof:true (no chunk) -> bank verifies (size+sha256), announces dataset, replies ingest_done
 
@@ -94,9 +94,9 @@ class DataBank:
 		print(f"[bank] ingest at {self.ingest_bind}")
 
 		class Session:
-			__slots__ = ("ds","svc","meta","f","hasher","next_seq","expected_size","expected_sha")
-			def __init__(self, ds, svc, meta, f, expected_size, expected_sha):
-				self.ds = ds; self.svc = svc; self.meta = meta; self.f = f
+			__slots__ = ("ds","gname","meta","f","hasher","next_seq","expected_size","expected_sha")
+			def __init__(self, ds, gname, meta, f, expected_size, expected_sha):
+				self.ds = ds; self.gname = gname; self.meta = meta; self.f = f
 				self.hasher = hashlib.sha256(); self.next_seq = 0
 				self.expected_size = expected_size; self.expected_sha = expected_sha
 
@@ -109,13 +109,13 @@ class DataBank:
 
 			if t == "ingest_start":
 				ds = hdr.get("dataset_id") or uuid.uuid4().hex
-				svc = hdr.get("service") or "unknown"
+				gname = hdr.get("global_name") or "unknown"
 				meta = hdr.get("meta") or {}
 				expected_size = int(hdr.get("size") or 0)
 				expected_sha = hdr.get("sha256") or ""
 				path = self.data_dir / f"{ds}.bin"
 				f = open(path, "wb")
-				inflight[ident] = Session(ds, svc, meta, f, expected_size, expected_sha)
+				inflight[ident] = Session(ds, gname, meta, f, expected_size, expected_sha)
 				await r.send_multipart([ident, dumps({"type":"ingest_ack","dataset_id": ds})])
 				continue
 
@@ -148,11 +148,11 @@ class DataBank:
 					if sess.expected_sha and sha != sess.expected_sha:
 						ok = False; err = f"sha mismatch: got {sha}, expected {sess.expected_sha}"
 					if ok:
-						self.index[sess.ds] = {"path": str(path), "size": size, "sha256": sha, "ts": time.time(), "meta": sess.meta, "service": sess.svc}
+						self.index[sess.ds] = {"path": str(path), "size": size, "sha256": sha, "ts": time.time(), "meta": sess.meta, "global_name": sess.gname}
 						self.index_path.write_bytes(dumps(self.index))
 						assert self.pub is not None
 						topic = f"dataset.{self.bank_id}".encode("utf-8")
-						await self.pub.send_multipart([topic, dumps({"dataset_id": sess.ds, "bank_id": self.bank_id, "size": size, "sha256": sha, "service": sess.svc})])
+						await self.pub.send_multipart([topic, dumps({"dataset_id": sess.ds, "bank_id": self.bank_id, "size": size, "sha256": sha, "global_name": sess.gname})])
 						await r.send_multipart([ident, dumps({"type":"ingest_done","dataset_id": sess.ds, "size": size, "sha256": sha})])
 					else:
 						await r.send_multipart([ident, dumps({"type":"error","dataset_id": sess.ds, "error":{"code":422,"message":err}})])
