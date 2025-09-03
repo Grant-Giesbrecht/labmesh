@@ -68,7 +68,9 @@ class DataBank:
 				self.index = {}
 
 	async def _register_with_broker(self):
-		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.broker_rpc)
+		req = self.contex.socket(zmq.DEALER)
+		_curve_client_setup(req)
+		req.connect(self.broker_rpc)
 		self.dir_req = req
 		await req.send(dumps({"type":"hello","role":"bank","bank_id": self.bank_id,
 							  "ingest": self.ingest_bind.replace("*","127.0.0.1"),

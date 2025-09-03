@@ -125,11 +125,21 @@ class LabClient:
 		assert self.dir_req is not None
 		rpc_uuid = uuid.uuid4().hex
 		await self.dir_req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params or {}}))
+		
+		# Continue reading messages until the message with the correct UUID returns
 		while True:
-			msg = loads(await asyncio.wait_for(self.dir_req.recv(), timeout=timeout))
+			
+			# Wait for message
+			msg = loads(await syncio.wait_for(self.dir_req.recv(), timeout=timeout))
+			
+			# Check for UUID
 			if msg.get("rpc_uuid") == rpc_uuid:
+				
+				# If everything matches up, great, return it out of the function!
 				if msg.get("type") == "rpc_result":
 					return msg.get("result")
+				
+				# If UUID matches but type does not, time to freak out a little
 				raise RuntimeError(msg.get("error"))
 	
 	#TODO: I think only Relays get relay_ids and I could rename list_gloabl_names get_relays or something
