@@ -18,20 +18,27 @@ DEFAULT_RPC_BIND = os.environ.get("LMH_DRV_RPC_BIND", "tcp://*:5850")  # each re
 STATE_PUB_CONNECT = BROKER_XSUB
 
 def _curve_server_setup(sock: zmq.Socket):
+	""" Configures CURVE for a sockets connecting to Broker for publishing"""
 	sec = os.environ.get("ZMQ_SERVER_SECRETKEY")
 	pub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if sec and pub:
-		sock.curve_secretkey = sec; sock.curve_publickey = pub; sock.curve_server = True
+		sock.curve_secretkey = sec
+		sock.curve_publickey = pub
+		sock.curve_server = True
 
 def _curve_client_setup(sock: zmq.Socket):
+	
 	csec = os.environ.get("ZMQ_CLIENT_SECRETKEY")
 	cpub = os.environ.get("ZMQ_CLIENT_PUBLICKEY")
 	spub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if csec and cpub and spub:
-		sock.curve_secretkey = csec; sock.curve_publickey = cpub; sock.curve_serverkey = spub
+		sock.curve_secretkey = csec
+		sock.curve_publickey = cpub
+		sock.curve_serverkey = spub
 
 class RelayAgent:
 	"""relay-side agent with direct RPC server and brokered events."""
+	
 	def __init__(self, relay_id: str, relay: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
 		self.relay_id = relay_id
 		self.relay = relay
