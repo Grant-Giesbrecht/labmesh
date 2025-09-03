@@ -14,10 +14,10 @@ async def main():
     client = LabClient()
     await client.connect()
 
-    print("Services:", await client.list_global_names())
+    print("Services:", await client.list_relay_ids())
     print("Banks:", await client.list_banks())
 
-    client.on_state(lambda gname, st: print(f"[state] {gname}: {st}"))
+    client.on_state(lambda rid, st: print(f"[state] {rid}: {st}"))
     client.on_dataset(lambda info: print(f"[dataset] new {info}"))
 
     psu = await client.relay("psu-1")

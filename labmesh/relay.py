@@ -10,7 +10,8 @@ from .util import dumps, loads
 from .util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
-BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750")
+#TODO: Don't hardcode 127.0.0.1 (in many places)
+BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750") # TODO: So the broker is at 127.0.0.1?
 BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://127.0.0.1:5751")
 
 DEFAULT_RPC_BIND = os.environ.get("LMH_DRV_RPC_BIND", "tcp://*:5850")  # each relay will pick/override
@@ -31,8 +32,8 @@ def _curve_client_setup(sock: zmq.Socket):
 
 class RelayAgent:
 	"""relay-side agent with direct RPC server and brokered events."""
-	def __init__(self, global_name: str, relay: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
-		self.global_name = global_name
+	def __init__(self, relay_id: str, relay: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
+		self.relay_id = relay_id
 		self.relay = relay
 		self.rpc_bind = rpc_bind
 		self.state_interval = state_interval
@@ -48,13 +49,13 @@ class RelayAgent:
 		self.dir_req = req
 		# Try to render bind address for clients (replace * with host)
 		rpc_endpoint_public = self.rpc_bind.replace("*", "127.0.0.1")
-		await req.send(dumps({"type":"hello","role":"relay","global_name": self.global_name, "rpc_endpoint": rpc_endpoint_public}))
+		await req.send(dumps({"type":"hello","role":"relay","relay_id": self.relay_id, "rpc_endpoint": rpc_endpoint_public}))
 		_ = await req.recv()
 
 	async def _serve_rpc(self):
 		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.rpc_bind)
 		self.router = r
-		print(f"[relay:{self.global_name}] RPC at {self.rpc_bind}")
+		print(f"[relay:{self.relay_id}] RPC at {self.rpc_bind}")
 		while True:
 			ident, payload = await r.recv_multipart()
 			msg = loads(payload)
@@ -78,25 +79,25 @@ class RelayAgent:
 	async def _serve_state(self):
 		p = self.contex.socket(zmq.PUB); _curve_client_setup(p); p.connect(STATE_PUB_CONNECT)
 		self.pub = p
-		topic = f"state.{self.global_name}".encode("utf-8")
-		print(f"[relay:{self.global_name}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
+		topic = f"state.{self.relay_id}".encode("utf-8")
+		print(f"[relay:{self.relay_id}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
 		while True:
 			if hasattr(self.relay, "poll"):
 				st: Mapping[str, Any] = self.relay.poll()
 			else:
-				st = {"global_name": self.global_name, "ts": time.time()}
-			await p.send_multipart([topic, dumps({"global_name": self.global_name, "state": dict(st)})])
+				st = {"relay_id": self.relay_id, "ts": time.time()}
+			await p.send_multipart([topic, dumps({"relay_id": self.relay_id, "state": dict(st)})])
 			await asyncio.sleep(self.state_interval)
 
 	async def run(self):
 		await asyncio.gather(self._register(), self._serve_rpc(), self._serve_state())
 
 # Helper for dataset upload to bank (from relay code)
-async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, global_name: str = "unknown", meta: Optional[Dict[str, Any]]=None):
+async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, relay_id: str = "unknown", meta: Optional[Dict[str, Any]]=None):
 	contex = zmq.asyncio.Context.instance()
 	dealer = contex.socket(zmq.DEALER); _curve_client_setup(dealer); dealer.connect(bank_ingest_endpoint)
 	did = dataset_id or uuid.uuid4().hex
-	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "global_name": global_name, "meta": meta or {}}))
+	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "relay_id": relay_id, "meta": meta or {}}))
 	_ = await dealer.recv()  # ack
 	CHUNK = 1_000_000
 	for i in range(0, len(dataset_bytes), CHUNK):

@@ -11,7 +11,7 @@ from .util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
 
-BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750")
+BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750") # Broker's port that you connect to to say hello or run pings (?)
 BROKER_XPUB = os.environ.get("LMH_XPUB_CONNECT", "tcp://127.0.0.1:5752")
 
 def _curve_client_setup(sock: zmq.Socket):
@@ -32,11 +32,11 @@ class RelayClient:
 
 	async def call(self, method: str, params: Any | None = None, timeout: float = 10.0) -> Any:
 		assert self.req is not None
-		rid = uuid.uuid4().hex
-		await self.req.send(dumps({"type":"rpc","id":rid,"method":method,"params":params}))
+		rpc_uuid = uuid.uuid4().hex
+		await self.req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params}))
 		while True:
 			msg = loads(await asyncio.wait_for(self.req.recv(), timeout=timeout))
-			if msg.get("id") != rid:
+			if msg.get("rpc_uuid") != rpc_uuid:
 				continue
 			if msg.get("type") == "rpc_result":
 				return msg.get("result")
@@ -106,9 +106,9 @@ class LabClient:
 			t = topic.decode()
 			msg = loads(payload)
 			if t.startswith("state."):
-				gname = msg.get("global_name"); st = msg.get("state")
+				rid = msg.get("relay_id"); st = msg.get("state")
 				for cb in list(self._state_cbs):
-					res = cb(gname, st)
+					res = cb(rid, st)
 					if asyncio.iscoroutine(res): await res
 			elif t.startswith("dataset."):
 				for cb in list(self._dataset_cbs):
@@ -123,31 +123,46 @@ class LabClient:
 
 	async def _rpc(self, method: str, params: Dict[str, Any] | None = None, timeout: float = 5.0) -> Any:
 		assert self.dir_req is not None
-		rid = uuid.uuid4().hex
-		await self.dir_req.send(dumps({"type":"rpc","id":rid,"method":method,"params":params or {}}))
+		rpc_uuid = uuid.uuid4().hex
+		await self.dir_req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params or {}}))
 		while True:
 			msg = loads(await asyncio.wait_for(self.dir_req.recv(), timeout=timeout))
-			if msg.get("id") == rid:
+			if msg.get("rpc_uuid") == rpc_uuid:
 				if msg.get("type") == "rpc_result":
 					return msg.get("result")
 				raise RuntimeError(msg.get("error"))
-
-	async def list_global_names(self) -> list[Dict[str, str]]:
-		return await self._rpc("list_global_names")
+	
+	#TODO: I think only Relays get relay_ids and I could rename list_gloabl_names get_relays or something
+	async def list_relay_ids(self) -> list[Dict[str, str]]:
+		""" Queries the broker's RPC port to get a dictionary of relay_id:endpoint ."""
+		return await self._rpc("list_relay_ids")
 
 	async def list_banks(self) -> list[Dict[str, str]]:
 		return await self._rpc("list_banks")
 
-	async def relay(self, global_name: str) -> RelayClient:
-		global_names = await self.list_global_names()
-		ep = next((s["rpc_endpoint"] for s in global_names if s["global_name"] == global_name), None)
+	async def relay(self, relay_id: str) -> RelayClient:
+		""" Returns a relay client for the specified global name. Raises exception 
+		if not found. """
+		
+		# Get list of global names
+		relay_ids = await self.list_relay_ids()
+		
+		# Get the first endpoint matching the specified name
+		ep = next((s["rpc_endpoint"] for s in relay_ids if s["relay_id"] == relay_id), None)
 		if not ep:
-			raise RuntimeError(f"global_name '{global_name}' not found")
+			raise RuntimeError(f"relay_id '{relay_id}' not found")
+		
+		# Create a RelayClient for that endpoint
 		dc = RelayClient(ep, contex=self.contex)
 		await dc.connect()
+		
+		# Return RelayClient
 		return dc
 
 	async def bank(self, bank_id: str | None = None) -> BankClient:
+		"""
+		"""
+		
 		banks = await self.list_banks()
 		if not banks:
 			raise RuntimeError("no banks registered")
