@@ -45,7 +45,7 @@ class DataBank:
 	"""
 	def __init__(self, *, ingest_bind: str = DEFAULT_INGEST_BIND, retrieve_bind: str = DEFAULT_RETRIEVE_BIND, data_dir: str = DATA_DIR,
 				 broker_rpc: str = BROKER_RPC, broker_xsub: str = BROKER_XSUB, bank_id: str = BANK_ID):
-		self.ctx = zmq.asyncio.Context.instance()
+		self.contex = zmq.asyncio.Context.instance()
 		self.ingest_bind = ingest_bind
 		self.retrieve_bind = retrieve_bind
 		self.data_dir = pathlib.Path(data_dir); self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -68,14 +68,14 @@ class DataBank:
 				self.index = {}
 
 	async def _register_with_broker(self):
-		req = self.ctx.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.broker_rpc)
+		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.broker_rpc)
 		self.dir_req = req
 		await req.send(dumps({"type":"hello","role":"bank","bank_id": self.bank_id,
 							  "ingest": self.ingest_bind.replace("*","127.0.0.1"),
 							  "retrieve": self.retrieve_bind.replace("*","127.0.0.1")}))
 		_ = await req.recv()
 
-		pub = self.ctx.socket(zmq.PUB); _curve_client_setup(pub); pub.connect(self.broker_xsub)
+		pub = self.contex.socket(zmq.PUB); _curve_client_setup(pub); pub.connect(self.broker_xsub)
 		self.pub = pub
 		asyncio.create_task(self._heartbeat())
 
@@ -89,7 +89,7 @@ class DataBank:
 				pass
 
 	async def _run_ingest(self):
-		r = self.ctx.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.ingest_bind)
+		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.ingest_bind)
 		self.ingest_router = r
 		print(f"[bank] ingest at {self.ingest_bind}")
 
@@ -160,7 +160,7 @@ class DataBank:
 					continue
 
 	async def _run_retrieve(self):
-		r = self.ctx.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.retrieve_bind)
+		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.retrieve_bind)
 		self.retrieve_router = r
 		print(f"[bank] retrieve at {self.retrieve_bind}")
 		while True:

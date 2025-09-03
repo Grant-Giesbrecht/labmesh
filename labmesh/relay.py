@@ -37,14 +37,14 @@ class RelayAgent:
 		self.rpc_bind = rpc_bind
 		self.state_interval = state_interval
 
-		self.ctx = zmq.asyncio.Context.instance()
+		self.contex = zmq.asyncio.Context.instance()
 		self.router: Optional[zmq.asyncio.Socket] = None  # RPC server (ROUTER)
 		self.pub: Optional[zmq.asyncio.Socket] = None     # state PUB
 		self.dir_req: Optional[zmq.asyncio.Socket] = None # register with broker
 
 	async def _register(self):
 		# connect to broker RPC and say hello with our endpoint
-		req = self.ctx.socket(zmq.DEALER); _curve_client_setup(req); req.connect(BROKER_RPC)
+		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(BROKER_RPC)
 		self.dir_req = req
 		# Try to render bind address for clients (replace * with host)
 		rpc_endpoint_public = self.rpc_bind.replace("*", "127.0.0.1")
@@ -52,7 +52,7 @@ class RelayAgent:
 		_ = await req.recv()
 
 	async def _serve_rpc(self):
-		r = self.ctx.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.rpc_bind)
+		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.rpc_bind)
 		self.router = r
 		print(f"[relay:{self.global_name}] RPC at {self.rpc_bind}")
 		while True:
@@ -76,7 +76,7 @@ class RelayAgent:
 				await r.send_multipart([ident, dumps({"type":"rpc_error","id":rid,"error":{"code":500,"message":str(e)}})])
 
 	async def _serve_state(self):
-		p = self.ctx.socket(zmq.PUB); _curve_client_setup(p); p.connect(STATE_PUB_CONNECT)
+		p = self.contex.socket(zmq.PUB); _curve_client_setup(p); p.connect(STATE_PUB_CONNECT)
 		self.pub = p
 		topic = f"state.{self.global_name}".encode("utf-8")
 		print(f"[relay:{self.global_name}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
@@ -93,8 +93,8 @@ class RelayAgent:
 
 # Helper for dataset upload to bank (from relay code)
 async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, global_name: str = "unknown", meta: Optional[Dict[str, Any]]=None):
-	ctx = zmq.asyncio.Context.instance()
-	dealer = ctx.socket(zmq.DEALER); _curve_client_setup(dealer); dealer.connect(bank_ingest_endpoint)
+	contex = zmq.asyncio.Context.instance()
+	dealer = contex.socket(zmq.DEALER); _curve_client_setup(dealer); dealer.connect(bank_ingest_endpoint)
 	did = dataset_id or uuid.uuid4().hex
 	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "global_name": global_name, "meta": meta or {}}))
 	_ = await dealer.recv()  # ack

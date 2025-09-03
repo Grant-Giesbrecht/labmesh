@@ -22,13 +22,13 @@ def _curve_client_setup(sock: zmq.Socket):
 		sock.curve_secretkey = csec; sock.curve_publickey = cpub; sock.curve_serverkey = spub
 
 class RelayClient:
-	def __init__(self, rpc_endpoint: str, *, ctx: Optional[zmq.asyncio.Context]=None):
-		self.ctx = ctx or zmq.asyncio.Context.instance()
+	def __init__(self, rpc_endpoint: str, *, contex: Optional[zmq.asyncio.Context]=None):
+		self.contex = contex or zmq.asyncio.Context.instance()
 		self.rpc_endpoint = rpc_endpoint
 		self.req: Optional[zmq.asyncio.Socket] = None
 
 	async def connect(self):
-		req = self.ctx.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.rpc_endpoint); self.req = req
+		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.rpc_endpoint); self.req = req
 
 	async def call(self, method: str, params: Any | None = None, timeout: float = 10.0) -> Any:
 		assert self.req is not None
@@ -51,13 +51,13 @@ class RelayClient:
 		return _caller
 
 class BankClient:
-	def __init__(self, retrieve_endpoint: str, *, ctx: Optional[zmq.asyncio.Context]=None):
-		self.ctx = ctx or zmq.asyncio.Context.instance()
+	def __init__(self, retrieve_endpoint: str, *, contex: Optional[zmq.asyncio.Context]=None):
+		self.contex = contex or zmq.asyncio.Context.instance()
 		self.retrieve_endpoint = retrieve_endpoint
 		self.req: Optional[zmq.asyncio.Socket] = None
 
 	async def connect(self):
-		req = self.ctx.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.retrieve_endpoint); self.req = req
+		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.retrieve_endpoint); self.req = req
 
 	async def download(self, dataset_id: str, dest_path: str, *, chunk_cb: Optional[Callable[[int], None]]=None, timeout: float = 60.0) -> Dict[str, Any]:
 		assert self.req is not None
@@ -82,15 +82,15 @@ class BankClient:
 
 class LabClient:
 	def __init__(self):
-		self.ctx = zmq.asyncio.Context.instance()
+		self.contex = zmq.asyncio.Context.instance()
 		self.dir_req: Optional[zmq.asyncio.Socket] = None
 		self.sub: Optional[zmq.asyncio.Socket] = None
 		self._state_cbs: list[Callable[[str, Dict[str, Any]], Awaitable[None] | None]] = []
 		self._dataset_cbs: list[Callable[[Dict[str, Any]], Awaitable[None] | None]] = []
 
 	async def connect(self):
-		req = self.ctx.socket(zmq.DEALER); _curve_client_setup(req); req.connect(BROKER_RPC); self.dir_req = req
-		sub = self.ctx.socket(zmq.SUB); _curve_client_setup(sub); sub.connect(BROKER_XPUB); self.sub = sub
+		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(BROKER_RPC); self.dir_req = req
+		sub = self.contex.socket(zmq.SUB); _curve_client_setup(sub); sub.connect(BROKER_XPUB); self.sub = sub
 		# hello
 		await req.send(dumps({"type":"hello","role":"client"})); _ = await req.recv()
 		# start listener
@@ -143,7 +143,7 @@ class LabClient:
 		ep = next((s["rpc_endpoint"] for s in global_names if s["global_name"] == global_name), None)
 		if not ep:
 			raise RuntimeError(f"global_name '{global_name}' not found")
-		dc = RelayClient(ep, ctx=self.ctx)
+		dc = RelayClient(ep, contex=self.contex)
 		await dc.connect()
 		return dc
 
@@ -157,6 +157,6 @@ class LabClient:
 				raise RuntimeError(f"bank '{bank_id}' not found")
 		else:
 			info = banks[0]
-		bc = BankClient(info["retrieve"], ctx=self.ctx)
+		bc = BankClient(info["retrieve"], contex=self.contex)
 		await bc.connect()
 		return bc

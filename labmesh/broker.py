@@ -26,7 +26,7 @@ def _curve_server_setup(sock: zmq.Socket):
 class DirectoryBroker:
 	"""Presence + endpoint directory + XPUB/XSUB forwarder (no RPC routing)."""
 	def __init__(self, *, rpc_bind: str = RPC_BIND, xsub_bind: str = XSUB_BIND, xpub_bind: str = XPUB_BIND):
-		self.ctx = zmq.asyncio.Context.instance()
+		self.contex = zmq.asyncio.Context.instance()
 		self.rpc_bind, self.xsub_bind, self.xpub_bind = rpc_bind, xsub_bind, xpub_bind
 		self._router: Optional[zmq.asyncio.Socket] = None
 		self._xsub: Optional[zmq.asyncio.Socket] = None
@@ -36,13 +36,13 @@ class DirectoryBroker:
 		self.banks: Dict[str, Dict[str, Any]] = {}     # bank_id -> {ingest, retrieve}
 	
 	async def _run_state_proxy(self):
-		xsub = self.ctx.socket(zmq.XSUB)
+		xsub = self.contex.socket(zmq.XSUB)
 		_curve_server_setup(xsub)
 		xsub.sndhwm = 4000
 		xsub.rcvhwm = 4000
 		xsub.bind(self.xsub_bind)
 
-		xpub = self.ctx.socket(zmq.XPUB)
+		xpub = self.contex.socket(zmq.XPUB)
 		_curve_server_setup(xpub)
 		xpub.sndhwm = 4000
 		xpub.rcvhwm = 4000
@@ -73,7 +73,7 @@ class DirectoryBroker:
 			xpub.close(0)
 
 	async def _run_directory(self):
-		r = self.ctx.socket(zmq.ROUTER); _curve_server_setup(r)
+		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r)
 		r.sndhwm = 1000; r.rcvhwm = 1000; r.bind(self.rpc_bind)
 		self._router = r
 		print(f"[broker] directory RPC at {self.rpc_bind}")
