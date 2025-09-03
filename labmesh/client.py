@@ -138,7 +138,7 @@ class LabClient:
 	async def list_banks(self) -> list[Dict[str, str]]:
 		return await self._rpc("list_banks")
 
-	async def driver(self, global_name: str) -> RelayClient:
+	async def relay(self, global_name: str) -> RelayClient:
 		global_names = await self.list_global_names()
 		ep = next((s["rpc_endpoint"] for s in global_names if s["global_name"] == global_name), None)
 		if not ep:

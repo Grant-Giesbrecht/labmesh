@@ -32,7 +32,7 @@ class DirectoryBroker:
 		self._xsub: Optional[zmq.asyncio.Socket] = None
 		self._xpub: Optional[zmq.asyncio.Socket] = None
 
-		self.drivers: Dict[str, Dict[str, Any]] = {}   # global_name -> {rpc_endpoint: str}
+		self.relays: Dict[str, Dict[str, Any]] = {}   # global_name -> {rpc_endpoint: str}
 		self.banks: Dict[str, Dict[str, Any]] = {}     # bank_id -> {ingest, retrieve}
 	
 	async def _run_state_proxy(self):
@@ -60,7 +60,7 @@ class DirectoryBroker:
 		try:
 			while True:
 				events = dict(await poller.poll())
-				# Forward data frames from drivers (PUB) to clients (SUB)
+				# Forward data frames from relays (PUB) to clients (SUB)
 				if xsub in events and events[xsub] & zmq.POLLIN:
 					msg = await xsub.recv_multipart()
 					await xpub.send_multipart(msg)
@@ -84,13 +84,13 @@ class DirectoryBroker:
 
 			if t == "hello":
 				role = msg.get("role")
-				if role == "driver":
+				if role == "relay":
 					gname, ep = msg.get("global_name"), msg.get("rpc_endpoint")
 					if not gname or not ep:
 						await r.send_multipart([ident, dumps({"type":"error","error":{"code":400,"message":"missing global_name/rpc_endpoint"}})]); continue
-					self.drivers[gname] = {"rpc_endpoint": ep}
-					await r.send_multipart([ident, dumps({"type":"hello","ok":True,"role":"driver"})])
-					print(f"[broker] driver up: {gname} -> {ep}")
+					self.relays[gname] = {"rpc_endpoint": ep}
+					await r.send_multipart([ident, dumps({"type":"hello","ok":True,"role":"relay"})])
+					print(f"[broker] relay up: {gname} -> {ep}")
 				elif role == "bank":
 					bank_id = msg.get("bank_id") or "bank"
 					ingest, retrieve = msg.get("ingest"), msg.get("retrieve")
@@ -105,7 +105,7 @@ class DirectoryBroker:
 			if t == "rpc":
 				method = msg.get("method"); rid = msg.get("id")
 				if method == "list_global_names":
-					result = [{"global_name": s, **info} for s, info in sorted(self.drivers.items())]
+					result = [{"global_name": s, **info} for s, info in sorted(self.relays.items())]
 					await r.send_multipart([ident, dumps({"type":"rpc_result","id":rid,"result":result})])
 				elif method == "list_banks":
 					result = [{"bank_id": b, **info} for b, info in sorted(self.banks.items())]

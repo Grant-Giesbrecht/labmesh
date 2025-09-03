@@ -2,7 +2,7 @@
 import asyncio, sys, time, random, os
 from typing import Dict, Any
 from labmesh import RelayAgent
-from labmesh.driver import upload_dataset
+from labmesh.relay import upload_dataset
 
 class MockPSU:
     def __init__(self, global_name: str):
@@ -37,7 +37,7 @@ async def periodic_upload(global_name: str):
         await asyncio.sleep(60)
         payload = ("Result %d from %s\n" % (n, global_name)).encode() * 200000  # ~4MB
         did = await upload_dataset(ingest, payload, global_name=global_name, meta={"note":"demo"})
-        print(f"[driver:{global_name}] uploaded dataset {did}")
+        print(f"[relay:{global_name}] uploaded dataset {did}")
         n += 1
 
 async def main():

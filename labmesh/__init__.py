@@ -1,6 +1,6 @@
 
 from .broker import DirectoryBroker
-from .driver import RelayAgent
+from .relay import RelayAgent
 from .client import LabClient, RelayClient, BankClient
 from .databank import DataBank
 

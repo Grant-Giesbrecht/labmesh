@@ -13,7 +13,7 @@ ensure_windows_selector_loop()
 BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750")
 BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://127.0.0.1:5751")
 
-DEFAULT_RPC_BIND = os.environ.get("LMH_DRV_RPC_BIND", "tcp://*:5850")  # each driver will pick/override
+DEFAULT_RPC_BIND = os.environ.get("LMH_DRV_RPC_BIND", "tcp://*:5850")  # each relay will pick/override
 STATE_PUB_CONNECT = BROKER_XSUB
 
 def _curve_server_setup(sock: zmq.Socket):
@@ -30,10 +30,10 @@ def _curve_client_setup(sock: zmq.Socket):
 		sock.curve_secretkey = csec; sock.curve_publickey = cpub; sock.curve_serverkey = spub
 
 class RelayAgent:
-	"""Driver-side agent with direct RPC server and brokered events."""
-	def __init__(self, global_name: str, driver: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
+	"""relay-side agent with direct RPC server and brokered events."""
+	def __init__(self, global_name: str, relay: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
 		self.global_name = global_name
-		self.driver = driver
+		self.relay = relay
 		self.rpc_bind = rpc_bind
 		self.state_interval = state_interval
 
@@ -48,13 +48,13 @@ class RelayAgent:
 		self.dir_req = req
 		# Try to render bind address for clients (replace * with host)
 		rpc_endpoint_public = self.rpc_bind.replace("*", "127.0.0.1")
-		await req.send(dumps({"type":"hello","role":"driver","global_name": self.global_name, "rpc_endpoint": rpc_endpoint_public}))
+		await req.send(dumps({"type":"hello","role":"relay","global_name": self.global_name, "rpc_endpoint": rpc_endpoint_public}))
 		_ = await req.recv()
 
 	async def _serve_rpc(self):
 		r = self.ctx.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.rpc_bind)
 		self.router = r
-		print(f"[driver:{self.global_name}] RPC at {self.rpc_bind}")
+		print(f"[relay:{self.global_name}] RPC at {self.rpc_bind}")
 		while True:
 			ident, payload = await r.recv_multipart()
 			msg = loads(payload)
@@ -62,9 +62,9 @@ class RelayAgent:
 				continue
 			rid = msg.get("id"); method = msg.get("method"); params = msg.get("params") or {}
 			try:
-				if not hasattr(self.driver, method):
+				if not hasattr(self.relay, method):
 					raise AttributeError(f"unknown method: {method}")
-				fn = getattr(self.driver, method)
+				fn = getattr(self.relay, method)
 				if isinstance(params, dict):
 					res = fn(**params)
 				elif isinstance(params, list):
@@ -79,10 +79,10 @@ class RelayAgent:
 		p = self.ctx.socket(zmq.PUB); _curve_client_setup(p); p.connect(STATE_PUB_CONNECT)
 		self.pub = p
 		topic = f"state.{self.global_name}".encode("utf-8")
-		print(f"[driver:{self.global_name}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
+		print(f"[relay:{self.global_name}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
 		while True:
-			if hasattr(self.driver, "poll"):
-				st: Mapping[str, Any] = self.driver.poll()
+			if hasattr(self.relay, "poll"):
+				st: Mapping[str, Any] = self.relay.poll()
 			else:
 				st = {"global_name": self.global_name, "ts": time.time()}
 			await p.send_multipart([topic, dumps({"global_name": self.global_name, "state": dict(st)})])
@@ -91,7 +91,7 @@ class RelayAgent:
 	async def run(self):
 		await asyncio.gather(self._register(), self._serve_rpc(), self._serve_state())
 
-# Helper for dataset upload to bank (from driver code)
+# Helper for dataset upload to bank (from relay code)
 async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, global_name: str = "unknown", meta: Optional[Dict[str, Any]]=None):
 	ctx = zmq.asyncio.Context.instance()
 	dealer = ctx.socket(zmq.DEALER); _curve_client_setup(dealer); dealer.connect(bank_ingest_endpoint)

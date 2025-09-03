@@ -20,7 +20,7 @@ async def main():
     client.on_state(lambda gname, st: print(f"[state] {gname}: {st}"))
     client.on_dataset(lambda info: print(f"[dataset] new {info}"))
 
-    psu = await client.driver("psu-1")
+    psu = await client.relay("psu-1")
     await psu.set_voltage(value=2.5)
 
     # auto-pick first bank and download datasets as they appear

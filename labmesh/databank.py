@@ -35,7 +35,7 @@ def _curve_client_setup(sock: zmq.Socket):
 class DataBank:
 	"""Accepts dataset uploads and serves downloads (with checksum verification).
 
-	Upload protocol (driver -> bank):
+	Upload protocol (relay -> bank):
 	  - ingest_start: {dataset_id, global_name, meta, size, sha256}
 	  - ingest_chunk: {dataset_id, seq, eof:false} + [binary chunk]  -> bank replies {ingest_ack_chunk, next_seq}
 	  - ingest_chunk eof:true (no chunk) -> bank verifies (size+sha256), announces dataset, replies ingest_done
