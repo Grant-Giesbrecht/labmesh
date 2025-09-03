@@ -35,15 +35,15 @@ class DirectoryBroker:
 		self.rpc_bind, self.xsub_bind, self.xpub_bind = rpc_bind, xsub_bind, xpub_bind
 		
 		# Class variables that will contain the sockets 
-		self._router: Optional[zmq.asyncio.Socket] = None
-		self._xsub: Optional[zmq.asyncio.Socket] = None
-		self._xpub: Optional[zmq.asyncio.Socket] = None
+		self._router: Optional[zmq.asyncio.Socket] = None # Socket that receives and replies to RPC commands (general commands to the server like ping, get list of relays)
+		self._xsub: Optional[zmq.asyncio.Socket] = None # Subscriber type socket that receives from the publishers on the network
+		self._xpub: Optional[zmq.asyncio.Socket] = None # Publisher type socket that sends packets from _xsub along to all subscribers on the network
 		
 		# List of available relays
 		self.relays: Dict[str, Dict[str, Any]] = {}   # relay_id -> {rpc_endpoint: str}
 		
 		# List of available banks
-		self.banks: Dict[str, Dict[str, Any]] = {}     # bank_id -> {ingest, retrieve}
+		self.banks: Dict[str, Dict[str, Any]] = {}     # bank_id -> {ingest:str, retrieve:str}
 	
 	async def _run_state_proxy(self):
 		""" Main loop to route subscription packets from publishers to subscribers

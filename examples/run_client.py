@@ -1,6 +1,6 @@
 
 import asyncio, os
-from labmesh import LabClient, RelayClient
+from labmesh import DirectorClientAgent, RelayClient
 
 class PSUClient(RelayClient):
     async def set_voltage(self, *, value: float):
@@ -11,7 +11,7 @@ class PSUClient(RelayClient):
         return await super().call("get_state", {})
 
 async def main():
-    client = LabClient()
+    client = DirectorClientAgent()
     await client.connect()
 
     print("Services:", await client.list_relay_ids())
@@ -20,12 +20,12 @@ async def main():
     client.on_state(lambda rid, st: print(f"[state] {rid}: {st}"))
     client.on_dataset(lambda info: print(f"[dataset] new {info}"))
 
-    psu = await client.relay("psu-1")
+    psu = await client.get_relay_agent("psu-1")
     await psu.set_voltage(value=2.5)
 
     # auto-pick first bank and download datasets as they appear
     async def downloader(info):
-        bank = await client.bank(info.get("bank_id"))
+        bank = await client.get_databank_agent(info.get("bank_id"))
         dest = f"./download_{info['dataset_id']}.bin"
         meta = await bank.download(info["dataset_id"], dest)
         print("[downloaded]", meta)
