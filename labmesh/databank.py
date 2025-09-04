@@ -224,7 +224,7 @@ class DataBank:
 					
 					# If chunk was received out of order, update status
 					if seq != sess.next_seq:
-						await in_router.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.ds, "next_seq": sess.next_seq, "status":"out_of_order"})])
+						await in_router.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.dataset_id, "next_seq": sess.next_seq, "status":"out_of_order"})])
 						continue
 					
 					# Process chunk
@@ -234,7 +234,7 @@ class DataBank:
 						sess.next_seq += 1 # update next expected sequence
 						
 					# Send acknowledgement 
-					await in_router.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.ds, "next_seq": sess.next_seq})])
+					await in_router.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.dataset_id, "next_seq": sess.next_seq})])
 					continue
 				
 				# EOF was received (no more chunk data)
@@ -245,7 +245,7 @@ class DataBank:
 					sess.file_handle.close()
 					
 					# Get stats on final result
-					path = self.data_dir / f"{sess.ds}.bin"
+					path = self.data_dir / f"{sess.dataset_id}.bin"
 					size = path.stat().st_size # Get size of file in bytes
 					sha = sess.hasher.hexdigest() # Run hash digest
 					
@@ -261,7 +261,7 @@ class DataBank:
 					if ok: # All okay
 						
 						# Add to index[dataset_id] = dict of file info
-						self.index[sess.dataset_id] = {"path": str(path), "size": size, "sha256": sha, "ts": time.time(), "meta": sess.meta, "relay_id": sess.rid}
+						self.index[sess.dataset_id] = {"path": str(path), "size": size, "sha256": sha, "ts": time.time(), "meta": sess.meta, "relay_id": sess.relay_id}
 						
 						# Write to index file
 						self.index_path.write_bytes(dumps(self.index))
@@ -273,14 +273,14 @@ class DataBank:
 						topic = f"dataset.{self.bank_id}".encode("utf-8")
 						
 						# Publish that a new dataset has been received
-						await self.pub.send_multipart([topic, dumps({"dataset_id": sess.ds, "bank_id": self.bank_id, "size": size, "sha256": sha, "relay_id": sess.rid})])
+						await self.pub.send_multipart([topic, dumps({"dataset_id": sess.dataset_id, "bank_id": self.bank_id, "size": size, "sha256": sha, "relay_id": sess.relay_id})])
 						
 						# Send ack to source-relay that ingest is successfully completed
-						await in_router.send_multipart([ident, dumps({"type":"ingest_done","dataset_id": sess.ds, "size": size, "sha256": sha})])
+						await in_router.send_multipart([ident, dumps({"type":"ingest_done","dataset_id": sess.dataset_id, "size": size, "sha256": sha})])
 					else:
 						
 						# If an error occured, reply to the source relay with that error
-						await in_router.send_multipart([ident, dumps({"type":"error","dataset_id": sess.ds, "error":{"code":422,"message":err}})])
+						await in_router.send_multipart([ident, dumps({"type":"error","dataset_id": sess.dataset_id, "error":{"code":422,"message":err}})])
 					
 					# Remove current session from the list of 'inflight' packets
 					inflight.pop(ident, None)
