@@ -101,15 +101,40 @@ class RelayAgent:
 
 # Helper for dataset upload to bank (from relay code)
 async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, relay_id: str = "unknown", meta: Optional[Dict[str, Any]]=None):
+	
+	# Create ZMQ context
 	contex = zmq.asyncio.Context.instance()
-	dealer = contex.socket(zmq.DEALER); _curve_client_setup(dealer); dealer.connect(bank_ingest_endpoint)
+	
+	# Create a dealer socket (to connect to the databank's router socket)
+	dealer = contex.socket(zmq.DEALER)
+	_curve_client_setup(dealer)
+	dealer.connect(bank_ingest_endpoint)
+	
+	# Get ID for dataset
 	did = dataset_id or uuid.uuid4().hex
+	
+	# Send ingest start
 	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "relay_id": relay_id, "meta": meta or {}}))
+	
+	# TODO: Do something with the ack message
 	_ = await dealer.recv()  # ack
+	
+	# Pick chunk size
 	CHUNK = 1_000_000
+	
+	# Loop over each chunk until the whole chunk is sent
 	for i in range(0, len(dataset_bytes), CHUNK):
+		
+		# Get chunk from total data
 		chunk = dataset_bytes[i:i+CHUNK]
+		
+		# Send a chunk
 		await dealer.send_multipart([dumps({"type":"ingest_chunk","dataset_id": did, "seq": i//CHUNK, "eof": False}), chunk])
+		
+		#TODO: Why doesn't this ever run receive? Acknowledgements are periodically sent
+		
+	
+	# Send EOF
 	await dealer.send_multipart([dumps({"type":"ingest_chunk","dataset_id": did, "seq": (len(dataset_bytes)+CHUNK-1)//CHUNK, "eof": True})])
 	_ = await dealer.recv()  # done
 	return did

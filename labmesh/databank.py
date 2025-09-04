@@ -20,12 +20,16 @@ CHUNK_SIZE = 1_000_000  # 1 MB
 HEARTBEAT_SEC = int(os.environ.get("LMH_HEARTBEAT_SECONDS", "5"))
 
 def _curve_server_setup(sock: zmq.Socket):
+	#TODO: Document requirements: One set of secret + public server keys, 1 or N for clients?
+	
 	sec = os.environ.get("ZMQ_SERVER_SECRETKEY")
 	pub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if sec and pub:
 		sock.curve_secretkey = sec; sock.curve_publickey = pub; sock.curve_server = True
 
 def _curve_client_setup(sock: zmq.Socket):
+	# TODO: Document key requirements
+	
 	csec = os.environ.get("ZMQ_CLIENT_SECRETKEY")
 	cpub = os.environ.get("ZMQ_CLIENT_PUBLICKEY")
 	spub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
@@ -43,21 +47,31 @@ class DataBank:
 	Download protocol (client -> bank):
 	  - get: {dataset_id} -> meta + chunk stream
 	"""
+	
 	def __init__(self, *, ingest_bind: str = DEFAULT_INGEST_BIND, retrieve_bind: str = DEFAULT_RETRIEVE_BIND, data_dir: str = DATA_DIR,
 				 broker_rpc: str = BROKER_RPC, broker_xsub: str = BROKER_XSUB, bank_id: str = BANK_ID):
+		
+		# Create ZMQ context
 		self.contex = zmq.asyncio.Context.instance()
-		self.ingest_bind = ingest_bind
-		self.retrieve_bind = retrieve_bind
+		
+		# List socket addresses
+		self.ingest_bind = ingest_bind # ZMQ address - data I/O
+		self.retrieve_bind = retrieve_bind # ZMQ address - data I/O
+		self.broker_xsub = broker_xsub # Broker subscription socket
+		self.broker_rpc = broker_rpc # Broker RPC socket
+		
+		# Directory where data is stored 
 		self.data_dir = pathlib.Path(data_dir); self.data_dir.mkdir(parents=True, exist_ok=True)
-		self.broker_rpc = broker_rpc
-		self.broker_xsub = broker_xsub
+		
+		# databank name
 		self.bank_id = bank_id
-
+		
+		# Associated sockets
 		self.ingest_router: Optional[zmq.asyncio.Socket] = None
 		self.retrieve_router: Optional[zmq.asyncio.Socket] = None
 		self.pub: Optional[zmq.asyncio.Socket] = None
-		self.dir_req: Optional[zmq.asyncio.Socket] = None  # to register/heartbeat with broker
-
+		self.rpc_sock: Optional[zmq.asyncio.Socket] = None  # to register/heartbeat with broker
+		
 		# simple index
 		self.index_path = self.data_dir / "index.json"
 		self.index: Dict[str, Dict[str, Any]] = {}
@@ -68,129 +82,288 @@ class DataBank:
 				self.index = {}
 
 	async def _register_with_broker(self):
-		req = self.contex.socket(zmq.DEALER)
+		""" Connect and register with broker. """
+		
+		# Setup the dealer style -> broker RPC socket
+		req = self.contex.socket(zmq.DEALER) # Dealer socket can send and receive
 		_curve_client_setup(req)
 		req.connect(self.broker_rpc)
-		self.dir_req = req
+		self.rpc_sock = req
+		
+		# Send hello message to broker, registering the bank
 		await req.send(dumps({"type":"hello","role":"bank","bank_id": self.bank_id,
 							  "ingest": self.ingest_bind.replace("*","127.0.0.1"),
 							  "retrieve": self.retrieve_bind.replace("*","127.0.0.1")}))
+		
+		# Receive response
+		# TODO: Do something with the acknowledgement
 		_ = await req.recv()
-
-		pub = self.contex.socket(zmq.PUB); _curve_client_setup(pub); pub.connect(self.broker_xsub)
+		
+		# Setup the publisher style -> broker subscriber socket
+		pub = self.contex.socket(zmq.PUB)
+		_curve_client_setup(pub)
+		pub.connect(self.broker_xsub)
 		self.pub = pub
+		
+		# Begin heartbeat task
 		asyncio.create_task(self._heartbeat())
 
 	async def _heartbeat(self):
-		assert self.dir_req is not None
+		""" Heartbeat task: Continuously show a sign of life to the broker
+		"""
+		
+		# Ensure that the socket is ready
+		assert self.rpc_sock is not None
+		
+		# Infinite loop
 		while True:
+			
+			# Wait the heartbeat period
 			await asyncio.sleep(HEARTBEAT_SEC)
+			
+			# Attempt to send a message to the broker
+			# TODO: Modify Broker to actually use this 
 			try:
-				await self.dir_req.send(dumps({"type":"heartbeat","role":"bank","bank_id": self.bank_id}))
+				await self.rpc_sock.send(dumps({"type":"heartbeat","role":"bank","bank_id": self.bank_id}))
 			except Exception:
 				pass
 
 	async def _run_ingest(self):
-		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.ingest_bind)
-		self.ingest_router = r
-		print(f"[bank] ingest at {self.ingest_bind}")
-
+		""" Coprocess that ingests data as it is sent from relay nodes.
+		"""
+		
+		# Prepare the router style (relay -> ingest) socket
+		in_router = self.contex.socket(zmq.ROUTER)
+		_curve_server_setup(in_router)
+		in_router.bind(self.ingest_bind)
+		self.ingest_router = in_router
+		
+		# Print location of ingest socket
+		print(f"[bank] ingest socket at {self.ingest_bind}")
+		
 		class Session:
-			__slots__ = ("ds","rid","meta","f","hasher","next_seq","expected_size","expected_sha")
-			def __init__(self, ds, rid, meta, f, expected_size, expected_sha):
-				self.ds = ds; self.rid = rid; self.meta = meta; self.f = f
-				self.hasher = hashlib.sha256(); self.next_seq = 0
-				self.expected_size = expected_size; self.expected_sha = expected_sha
-
+			""" Class that defines a session of data being uploaded. """
+			
+			__slots__ = ("dataset_id","relay_id","meta","file_handle","hasher","next_seq","expected_size","expected_sha")
+			def __init__(self, dataset_id, relay_id, meta, file_handle, expected_size, expected_sha):
+				self.dataset_id = dataset_id
+				self.relay_id = relay_id
+				self.meta = meta
+				self.file_handle = file_handle
+				self.hasher = hashlib.sha256()
+				self.next_seq = 0
+				self.expected_size = expected_size
+				self.expected_sha = expected_sha
+		
+		# Prepare a dictionary of inflight sessions, these are packets in the process of being downloaded
+		# over a series of 1+ packets. 
+		#  - First a type:ingest_start is sent, then 1+ type:ingest_chunk:eof=False, then a type:ingest_chunk:eof=True
 		inflight: Dict[bytes, Session] = {}
-
+		
+		# Main loop
 		while True:
-			frames = await r.recv_multipart()
-			ident, payload = frames[0], frames[1]
-			hdr = loads(payload); t = hdr.get("type")
-
-			if t == "ingest_start":
-				ds = hdr.get("dataset_id") or uuid.uuid4().hex
-				rid = hdr.get("relay_id") or "unknown"
-				meta = hdr.get("meta") or {}
-				expected_size = int(hdr.get("size") or 0)
-				expected_sha = hdr.get("sha256") or ""
-				path = self.data_dir / f"{ds}.bin"
-				f = open(path, "wb")
-				inflight[ident] = Session(ds, rid, meta, f, expected_size, expected_sha)
-				await r.send_multipart([ident, dumps({"type":"ingest_ack","dataset_id": ds})])
+			
+			# recv_multipart gets all data frames (as bytes) and returns then in one blocking go
+			frames = await in_router.recv_multipart()
+			
+			# The dealer->router pattern in ZMQ will send 2 frames, the identity of the sender, then the actual message sent. This
+			# is why you only see the 'payload' being sent in the relay.py's upload function.
+			try:
+				ident, payload = frames[0], frames[1] # First frame is identity of sender, second frame is the actual payload
+			except Exception as e:
+				print(f"Exception occured while attempting to read 2 frames from recv_multipart ({e})")
 				continue
-
-			if t == "ingest_chunk":
+			
+			# Unpack data from payload
+			packet_data = loads(payload)
+			
+			# Get the message type 
+			ingest_type = packet_data.get("type")
+			
+			# Check if it's the first component of the data packet
+			if ingest_type == "ingest_start":
+				
+				# Unpack packet
+				dataset_id = packet_data.get("dataset_id") or uuid.uuid4().hex # Get dataset id
+				rid = packet_data.get("relay_id") or "unknown" # Get relay id
+				meta = packet_data.get("meta") or {} # Get metadata
+				
+				#TODO: I don't see this in the upload function?
+				expected_size = int(packet_data.get("size") or 0)
+				expected_sha = packet_data.get("sha256") or ""
+				
+				# Choose filenmae based on dataset ID
+				path = self.data_dir / f"{dataset_id}.bin"
+				fh = open(path, "wb") # Open file handle
+				
+				# Create a session object and add to inflight - you could have multiple from multiple relays
+				inflight[ident] = Session(dataset_id, rid, meta, fh, expected_size, expected_sha)
+				
+				# Send acknowledgement message
+				await in_router.send_multipart([ident, dumps({"type":"ingest_ack","dataset_id": dataset_id})])
+				continue
+			
+			# Else, check if it's a follow up chunk
+			elif ingest_type == "ingest_chunk":
+				
+				# Get the session object matching the sender
 				sess = inflight.get(ident)
 				if not sess:
-					await r.send_multipart([ident, dumps({"type":"error","error":{"code":409,"message":"no ingest_start"}})])
+					
+					# Send an error if you can't find the sender
+					await in_router.send_multipart([ident, dumps({"type":"error","error":{"code":409,"message":"no ingest_start"}})])
 					continue
-				seq = int(hdr.get("seq") or 0)
-				eof = bool(hdr.get("eof"))
+				
+				# 
+				seq = int(packet_data.get("seq") or 0) # Get sequence (ie. )
+				eof = bool(packet_data.get("eof"))
 				chunk = frames[2] if len(frames) > 2 else b""
-
-				if not eof:
+				
+				# Check if this is the last chunk...
+				if not eof: # Not last chunk
+					
+					# If chunk was received out of order, update status
 					if seq != sess.next_seq:
-						await r.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.ds, "next_seq": sess.next_seq, "status":"out_of_order"})])
+						await in_router.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.ds, "next_seq": sess.next_seq, "status":"out_of_order"})])
 						continue
+					
+					# Process chunk
 					if chunk:
-						sess.f.write(chunk); sess.hasher.update(chunk); sess.next_seq += 1
-					await r.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.ds, "next_seq": sess.next_seq})])
+						sess.file_handle.write(chunk) # Write chunk to file
+						sess.hasher.update(chunk) # Add chunk to hasher's total data
+						sess.next_seq += 1 # update next expected sequence
+						
+					# Send acknowledgement 
+					await in_router.send_multipart([ident, dumps({"type":"ingest_ack_chunk","dataset_id": sess.ds, "next_seq": sess.next_seq})])
 					continue
+				
+				# EOF was received (no more chunk data)
 				else:
-					sess.f.flush(); sess.f.close()
+					
+					# Close file
+					sess.file_handle.flush()
+					sess.file_handle.close()
+					
+					# Get stats on final result
 					path = self.data_dir / f"{sess.ds}.bin"
-					size = path.stat().st_size
-					sha = sess.hasher.hexdigest()
+					size = path.stat().st_size # Get size of file in bytes
+					sha = sess.hasher.hexdigest() # Run hash digest
+					
+					# Run error checks
 					ok = True
 					err = None
-					if sess.expected_size and size != sess.expected_size:
-						ok = False; err = f"size mismatch: got {size}, expected {sess.expected_size}"
-					if sess.expected_sha and sha != sess.expected_sha:
-						ok = False; err = f"sha mismatch: got {sha}, expected {sess.expected_sha}"
-					if ok:
-						self.index[sess.ds] = {"path": str(path), "size": size, "sha256": sha, "ts": time.time(), "meta": sess.meta, "relay_id": sess.rid}
+					if sess.expected_size and size != sess.expected_size: # Size mismatch
+						ok = False
+						err = f"size mismatch: got {size}, expected {sess.expected_size}"
+					if sess.expected_sha and sha != sess.expected_sha: # Hash mismatch
+						ok = False
+						err = f"sha mismatch: got {sha}, expected {sess.expected_sha}"
+					if ok: # All okay
+						
+						# Add to index[dataset_id] = dict of file info
+						self.index[sess.dataset_id] = {"path": str(path), "size": size, "sha256": sha, "ts": time.time(), "meta": sess.meta, "relay_id": sess.rid}
+						
+						# Write to index file
 						self.index_path.write_bytes(dumps(self.index))
+						
+						# Ensure that publishing socket is ready
 						assert self.pub is not None
+						
+						# Prepare topic for publishing
 						topic = f"dataset.{self.bank_id}".encode("utf-8")
+						
+						# Publish that a new dataset has been received
 						await self.pub.send_multipart([topic, dumps({"dataset_id": sess.ds, "bank_id": self.bank_id, "size": size, "sha256": sha, "relay_id": sess.rid})])
-						await r.send_multipart([ident, dumps({"type":"ingest_done","dataset_id": sess.ds, "size": size, "sha256": sha})])
+						
+						# Send ack to source-relay that ingest is successfully completed
+						await in_router.send_multipart([ident, dumps({"type":"ingest_done","dataset_id": sess.ds, "size": size, "sha256": sha})])
 					else:
-						await r.send_multipart([ident, dumps({"type":"error","dataset_id": sess.ds, "error":{"code":422,"message":err}})])
+						
+						# If an error occured, reply to the source relay with that error
+						await in_router.send_multipart([ident, dumps({"type":"error","dataset_id": sess.ds, "error":{"code":422,"message":err}})])
+					
+					# Remove current session from the list of 'inflight' packets
 					inflight.pop(ident, None)
 					continue
 
 	async def _run_retrieve(self):
-		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.retrieve_bind)
+		""" Coprocess that returns data to clients when requested.
+		"""
+		
+		# Prepare the router-style socket (databank -> clients)
+		r = self.contex.socket(zmq.ROUTER)
+		_curve_server_setup(r)
+		r.bind(self.retrieve_bind)
 		self.retrieve_router = r
-		print(f"[bank] retrieve at {self.retrieve_bind}")
+		print(f"[bank] retrieve socket at {self.retrieve_bind}")
+		
+		# Main loop
 		while True:
+			
+			# Get client identity and message payload
 			ident, payload = await r.recv_multipart()
-			hdr = loads(payload)
-			if hdr.get("type") != "get":
-				await r.send_multipart([ident, dumps({"type":"error","error":{"code":400,"message":"expected get"}})]); continue
-			ds = hdr.get("dataset_id")
-			info = self.index.get(ds)
+			
+			# Unpack packet bytes -> dict
+			packet_data = loads(payload)
+			
+			# Ensure the messaage type = 'get'
+			if packet_data.get("type") != "get":
+				# Send an erorr message back
+				await r.send_multipart([ident, dumps({"type":"error","error":{"code":400,"message":"expected get"}})])
+				# Resume main loop
+				continue
+			
+			# Else get dataset id
+			dataset_id = packet_data.get("dataset_id")
+			
+			# Lookup index entry of data to return to client
+			info = self.index.get(dataset_id)
+			
+			# If failed to find index data send error
 			if not info:
-				await r.send_multipart([ident, dumps({"type":"error","error":{"code":404,"message":"not found"}})]); continue
-			path = info["path"]; size = info["size"]; sha = info["sha256"]; meta = info.get("meta", {})
-			await r.send_multipart([ident, dumps({"type":"meta","dataset_id": ds, "size": size, "sha256": sha, "meta": meta})])
+				await r.send_multipart([ident, dumps({"type":"error","error":{"code":404,"message":"not found"}})])
+				continue
+			
+			
+			path = info["path"] # Get path to data file
+			size = info["size"] # Get size of data file
+			sha = info["sha256"] # Get hash
+			meta = info.get("meta", {}) # Get metadata
+			
+			# Send file info, size, etc
+			await r.send_multipart([ident, dumps({"type":"meta","dataset_id": dataset_id, "size": size, "sha256": sha, "meta": meta})])
+			
+			# Open file to send
 			with open(path, "rb") as f:
+				
+				# Initialize sequence counter 
 				seq = 0
+				
+				# Loop until file is sent
 				while True:
-					chunk = f.read(CHUNK_SIZE)
+					
+					# Read a chunk... break when no more available
+					chunk = f.read(CHUNK_SIZE) 
 					if not chunk:
 						break
-					await r.send_multipart([ident, dumps({"type":"chunk","dataset_id": ds, "seq": seq, "eof": False}), chunk])
+					
+					# Send data to client
+					await r.send_multipart([ident, dumps({"type":"chunk","dataset_id": dataset_id, "seq": seq, "eof": False}), chunk])
+					
+					# Increment sequence counter
 					seq += 1
-				await r.send_multipart([ident, dumps({"type":"chunk","dataset_id": ds, "seq": seq, "eof": True})])
+				
+				# Send EOF signal
+				await r.send_multipart([ident, dumps({"type":"chunk","dataset_id": dataset_id, "seq": seq, "eof": True})])
 
 	async def serve(self):
-		await self._register_with_broker()
+		""" Begin databank process. """
+		
+		await self._register_with_broker() # NOTE: This also starts the heartbeat process # TODO: Move this into the __init__?
 		await asyncio.gather(self._run_ingest(), self._run_retrieve())
 
 async def _main():
+	
 	bank = DataBank()
 	await bank.serve()
 
