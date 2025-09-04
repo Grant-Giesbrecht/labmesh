@@ -168,15 +168,17 @@ class DirectoryBroker:
 				
 				# Perform each action
 				if method == "list_relay_ids":
+					print(f"Received LIST_RELAY_IDs")
 					result = [{"relay_id": s, **info} for s, info in sorted(self.relays.items())] # Prepare dict
-					await router.send_multipart([ident, dumps({"type":"rpc_result","id":uuid,"result":result})]) # Send response to specific UUID
+					await router.send_multipart([ident, dumps({"type":"rpc_result","rpc_uuid":uuid,"result":result})]) # Send response to specific UUID
 				elif method == "list_banks":
+					print(f"Received LIST_BANKS")
 					result = [{"bank_id": b, **info} for b, info in sorted(self.banks.items())]
-					await router.send_multipart([ident, dumps({"type":"rpc_result","id":uuid,"result":result})])
+					await router.send_multipart([ident, dumps({"type":"rpc_result","rpc_uuid":uuid,"result":result})])
 				elif method == "ping":
-					await router.send_multipart([ident, dumps({"type":"rpc_result","id":uuid,"result":{"ok":True}})])
+					await router.send_multipart([ident, dumps({"type":"rpc_result","rpc_uuid":uuid,"result":{"ok":True}})])
 				else:
-					await router.send_multipart([ident, dumps({"type":"rpc_error","id":uuid,"error":{"code":400,"message":f"unknown method {method}"}})])
+					await router.send_multipart([ident, dumps({"type":"rpc_error","rpc_uuid":uuid,"error":{"code":400,"message":f"unknown method {method}"}})])
 				continue
 	
 	async def serve(self):

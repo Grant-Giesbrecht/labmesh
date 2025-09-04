@@ -200,14 +200,22 @@ class DirectorClientAgent:
 		# Create a unique ID for the RPC packet
 		rpc_uuid = uuid.uuid4().hex
 		
+		print("A", flush=True)
+		
 		# Send packet
 		await self.dir_req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params or {}}))
+		
+		print("B", flush=True)
 		
 		# Continue reading messages until the message with the correct UUID returns
 		while True:
 			
+			print("C", flush=True)
+			
 			# Wait for message
 			msg = loads(await asyncio.wait_for(self.dir_req.recv(), timeout=timeout))
+			
+			print("D", flush=True)
 			
 			# Check for UUID
 			if msg.get("rpc_uuid") == rpc_uuid:
