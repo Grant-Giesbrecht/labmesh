@@ -27,24 +27,49 @@ def _curve_client_setup(sock: zmq.Socket):
 		sock.curve_serverkey = spub
 
 class RelayClient:
+	""" Agent class to talk to a specific relay.
+	"""
+	
 	def __init__(self, rpc_endpoint: str, *, contex: Optional[zmq.asyncio.Context]=None):
 		self.contex = contex or zmq.asyncio.Context.instance()
 		self.rpc_endpoint = rpc_endpoint
 		self.req: Optional[zmq.asyncio.Socket] = None
 
 	async def connect(self):
-		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.rpc_endpoint); self.req = req
+		""" Connect socket to relay's RPC endpoint"""
+		
+		req = self.contex.socket(zmq.DEALER)
+		_curve_client_setup(req)
+		req.connect(self.rpc_endpoint)
+		self.req = req
 
 	async def call(self, method: str, params: Any | None = None, timeout: float = 10.0) -> Any:
+		""" Perform a remote procedure call on the target relay. """
+		
+		# Ensure socket is ready
 		assert self.req is not None
+		
+		# Create a unique ID for the RPC
 		rpc_uuid = uuid.uuid4().hex
+		
+		# Send message packet
 		await self.req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params}))
+		
+		# Continue looping until the appropriate return message is received
 		while True:
+			
+			# Read a message (could be a response to a different  RPC)
 			msg = loads(await asyncio.wait_for(self.req.recv(), timeout=timeout))
+			
+			# Check if UUID matches
 			if msg.get("rpc_uuid") != rpc_uuid:
 				continue
+			
+			# Ensure appropriate type
 			if msg.get("type") == "rpc_result":
 				return msg.get("result")
+			
+			# Check for errors
 			if msg.get("type") == "rpc_error":
 				err = msg.get("error") or {}
 				raise RuntimeError(f"RPC error {err.get('code')}: {err.get('message')}")
