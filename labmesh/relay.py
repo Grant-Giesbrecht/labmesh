@@ -117,23 +117,56 @@ class RelayAgent:
 				await r.send_multipart([ident, dumps({"type":"rpc_error","rpc_uuid":rid,"error":{"code":500,"message":str(e)}})])
 
 	async def _serve_state(self):
-		p = self.contex.socket(zmq.PUB); _curve_client_setup(p); p.connect(STATE_PUB_CONNECT)
+		""" Coroutine to periodically push states to all subscribers.
+		
+		It periodically calls `self.relay.poll()`. Whatever you need to update the state of
+		the object, place that in `poll()`. Expects `poll()` to return a dictionary.
+		
+		"""
+		
+		# Create publisher socket
+		p = self.contex.socket(zmq.PUB)
+		_curve_client_setup(p)
+		p.connect(STATE_PUB_CONNECT)
 		self.pub = p
+		
+		# Prepare topic string from relay ID
 		topic = f"state.{self.relay_id}".encode("utf-8")
-		print(f"[relay:{self.relay_id}] publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
+		
+		# Print message
+		print(f"[relay:{self.relay_id}] periodically publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
+		
+		# Main loop
 		while True:
+			
+			# Ensure object has 'poll' method
 			if hasattr(self.relay, "poll"):
-				st: Mapping[str, Any] = self.relay.poll()
+				st: Mapping[str, Any] = self.relay.poll() #TODO: Add timestamp 
 			else:
 				st = {"relay_id": self.relay_id, "ts": time.time()}
+			
+			# Send packet
 			await p.send_multipart([topic, dumps({"relay_id": self.relay_id, "state": dict(st)})])
+			
+			# Pause for interval
 			await asyncio.sleep(self.state_interval)
 
 	async def run(self):
+		""" Runs the server by starting all coroutines:
+		 * _register: registers the IP address and endpoint with the broker
+		 * _serve_rpc: Responds to remote-procedure-calls
+		 * _serve_state: Periodically pushes state updates to all subscribers.
+		
+		"""
 		await asyncio.gather(self._register(), self._serve_rpc(), self._serve_state())
 
 # Helper for dataset upload to bank (from relay code)
 async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dataset_id: Optional[str]=None, relay_id: str = "unknown", meta: Optional[Dict[str, Any]]=None):
+	""" Uploads a dataset to a specific band endpoint. 
+	
+	Returns:
+	 	dataset_id
+	"""
 	
 	# Create ZMQ context
 	contex = zmq.asyncio.Context.instance()
@@ -165,7 +198,6 @@ async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dat
 		await dealer.send_multipart([dumps({"type":"ingest_chunk","dataset_id": did, "seq": i//CHUNK, "eof": False}), chunk])
 		
 		#TODO: Why doesn't this ever run receive? Acknowledgements are periodically sent
-		
 	
 	# Send EOF
 	await dealer.send_multipart([dumps({"type":"ingest_chunk","dataset_id": did, "seq": (len(dataset_bytes)+CHUNK-1)//CHUNK, "eof": True})])
