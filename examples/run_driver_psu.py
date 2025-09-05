@@ -5,6 +5,8 @@ from labmesh import RelayAgent
 from labmesh.relay import upload_dataset
 
 class MockPSU:
+	""" Dummy class to pretend to be a power supply unit. """
+	
 	def __init__(self, relay_id: str):
 		self.rid = relay_id
 		self.voltage = 0.0
@@ -31,19 +33,39 @@ class MockPSU:
 
 async def periodic_upload(relay_id: str):
 	# pretend a big result every ~5s
+	
+	# Get databank ingest address
 	ingest = os.environ.get("LMH_BANK_INGEST_CONNECT", "tcp://127.0.0.1:5761")
+	
+	# Main loop
 	n = 0
 	while True:
+		
+		# Pause...
 		await asyncio.sleep(60)
+		
+		# Create a fake data payload
 		payload = ("Result %d from %s\n" % (n, relay_id)).encode() * 200000  # ~4MB
+		
+		# Upload, get dataset_id
 		did = await upload_dataset(ingest, payload, relay_id=relay_id, meta={"note":"demo"})
-		print(f"[relay:{relay_id}] uploaded dataset {did}")
+		
+		# Print confirmation
+		print(f"[relay:{relay_id}] uploaded dataset id={did}")
 		n += 1
 
 async def main():
+	
+	# Make a relay_id
 	relay_id = sys.argv[1] if len(sys.argv) > 1 else "psu-1"
+	
+	# Create the RelayAgent to connect to the network
 	agent = RelayAgent(relay_id, MockPSU(relay_id), state_interval=1.0)
+	
+	# Launch all tasks (RelayAgent's task's and periodic upload)
 	await asyncio.gather(agent.run(), periodic_upload(relay_id))
 
 if __name__ == "__main__":
+	
+	# Run main function
 	asyncio.run(main())
