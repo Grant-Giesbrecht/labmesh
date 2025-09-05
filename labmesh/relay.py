@@ -51,37 +51,70 @@ class RelayAgent:
 		self.dir_req: Optional[zmq.asyncio.Socket] = None # register with broker
 
 	async def _register(self):
-		# connect to broker RPC and say hello with our endpoint
-		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(BROKER_RPC)
+		""" Connect to the network by sending a hello to the Broker. """
+		
+		# connect to broker RPC and say hello with the relay's endpoint
+		req = self.contex.socket(zmq.DEALER)
+		_curve_client_setup(req)
+		req.connect(BROKER_RPC)
 		self.dir_req = req
+		
 		# Try to render bind address for clients (replace * with host)
 		rpc_endpoint_public = self.rpc_bind.replace("*", "127.0.0.1")
 		await req.send(dumps({"type":"hello","role":"relay","relay_id": self.relay_id, "rpc_endpoint": rpc_endpoint_public}))
-		_ = await req.recv()
+		
+		#TODO: Use ACK message
+		_ = await req.recv() 
 
 	async def _serve_rpc(self):
-		r = self.contex.socket(zmq.ROUTER); _curve_server_setup(r); r.bind(self.rpc_bind)
+		""" Respond to a RPC call NOTE: from broker or client?
+		"""
+		
+		# Prepare socket
+		r = self.contex.socket(zmq.ROUTER)
+		_curve_server_setup(r)
+		r.bind(self.rpc_bind)
 		self.router = r
 		print(f"[relay:{self.relay_id}] RPC at {self.rpc_bind}")
+		
+		# Main loop
 		while True:
+			
+			# Get identity of sender and message payload
 			ident, payload = await r.recv_multipart()
-			msg = loads(payload)
+			msg = loads(payload) # Decode message
+			
+			# Check that message type is remote-procedure-call
 			if msg.get("type") != "rpc":
 				continue
-			rid = msg.get("id"); method = msg.get("method"); params = msg.get("params") or {}
+			
+			# Unpack message components
+			rid = msg.get("rpc_uuid")
+			method = msg.get("method")
+			params = msg.get("params") or {}
+			
+			# Attempt to execute
 			try:
+				
+				# Verify that method exists
 				if not hasattr(self.relay, method):
 					raise AttributeError(f"unknown method: {method}")
+				
+				# Get method
 				fn = getattr(self.relay, method)
+				
+				# Apply parameters and call method
 				if isinstance(params, dict):
 					res = fn(**params)
 				elif isinstance(params, list):
 					res = fn(*params)
 				else:
 					res = fn(params)
-				await r.send_multipart([ident, dumps({"type":"rpc_result","id":rid,"result":res})])
+					
+				# Send ACK message
+				await r.send_multipart([ident, dumps({"type":"rpc_result","rpc_uuid":rid,"result":res})])
 			except Exception as e:
-				await r.send_multipart([ident, dumps({"type":"rpc_error","id":rid,"error":{"code":500,"message":str(e)}})])
+				await r.send_multipart([ident, dumps({"type":"rpc_error","rpc_uuid":rid,"error":{"code":500,"message":str(e)}})])
 
 	async def _serve_state(self):
 		p = self.contex.socket(zmq.PUB); _curve_client_setup(p); p.connect(STATE_PUB_CONNECT)
