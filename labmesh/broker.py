@@ -32,7 +32,9 @@ class DirectoryBroker:
 		self.contex = zmq.asyncio.Context.instance()
 		
 		# Get the rpc, xsub, and xpub socket addresses
-		self.rpc_bind, self.xsub_bind, self.xpub_bind = rpc_bind, xsub_bind, xpub_bind
+		self.rpc_bind = rpc_bind
+		self.xsub_bind = xsub_bind
+		self.xpub_bind = xpub_bind
 		
 		# Class variables that will contain the sockets 
 		self._router: Optional[zmq.asyncio.Socket] = None # Socket that receives and replies to RPC commands (general commands to the server like ping, get list of relays)

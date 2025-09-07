@@ -44,7 +44,7 @@ class RelayAgent:
 		self.relay = relay
 		self.rpc_bind = rpc_bind
 		self.state_interval = state_interval
-
+		
 		self.contex = zmq.asyncio.Context.instance()
 		self.router: Optional[zmq.asyncio.Socket] = None  # RPC server (ROUTER)
 		self.pub: Optional[zmq.asyncio.Socket] = None     # state PUB

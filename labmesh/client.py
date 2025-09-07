@@ -87,7 +87,12 @@ class BankClient:
 		self.req: Optional[zmq.asyncio.Socket] = None
 
 	async def connect(self):
-		req = self.contex.socket(zmq.DEALER); _curve_client_setup(req); req.connect(self.retrieve_endpoint); self.req = req
+		""" Connect socket to the bank's socket."""
+		
+		req = self.contex.socket(zmq.DEALER)
+		_curve_client_setup(req)
+		req.connect(self.retrieve_endpoint)
+		self.req = req
 
 	async def download(self, dataset_id: str, dest_path: str, *, chunk_cb: Optional[Callable[[int], None]]=None, timeout: float = 60.0) -> Dict[str, Any]:
 		assert self.req is not None
