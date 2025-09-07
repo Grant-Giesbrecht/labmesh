@@ -35,6 +35,7 @@ async def periodic_upload(relay_id: str):
 	# pretend a big result every ~5s
 	
 	# Get databank ingest address
+	#TODO: This address should not be hardcoded
 	ingest = os.environ.get("LMH_BANK_INGEST_CONNECT", "tcp://127.0.0.1:5761")
 	
 	# Main loop
@@ -59,8 +60,11 @@ async def main():
 	# Make a relay_id
 	relay_id = sys.argv[1] if len(sys.argv) > 1 else "psu-1"
 	
+	# Select a port to listen to, each driver needs a unique one
+	rpc_addr = sys.argv[2] if len(sys.argv) > 2 else "tcp://*:5850"
+	
 	# Create the RelayAgent to connect to the network
-	agent = RelayAgent(relay_id, MockPSU(relay_id), state_interval=1.0)
+	agent = RelayAgent(relay_id, MockPSU(relay_id), state_interval=1.0, rpc_bind=rpc_addr)
 	
 	# Launch all tasks (RelayAgent's task's and periodic upload)
 	await asyncio.gather(agent.run(), periodic_upload(relay_id))
