@@ -11,8 +11,8 @@ from .util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
 #TODO: Don't hardcode 127.0.0.1 (in many places)
-BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750") # TODO: So the broker is at 127.0.0.1?
-BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://127.0.0.1:5751")
+BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://BROKER:5750") # TODO: So the broker is at 127.0.0.1?
+BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://BROKER:5751")
 
 DEFAULT_RPC_BIND = os.environ.get("LMH_DRV_RPC_BIND", "tcp://*:5850")  # each relay will pick/override
 STATE_PUB_CONNECT = BROKER_XSUB
@@ -39,11 +39,14 @@ def _curve_client_setup(sock: zmq.Socket):
 class RelayAgent:
 	"""relay-side agent with direct RPC server and brokered events."""
 	
-	def __init__(self, relay_id: str, relay: Any, *, rpc_bind: str = DEFAULT_RPC_BIND, state_interval: float = 1.0):
+	def __init__(self, relay_id:str, relay:Any, local_address:str="127.0.0.1", broker_address:str="127.0.0.1", rpc_bind:str=DEFAULT_RPC_BIND, state_interval:float=1.0):
 		self.relay_id = relay_id
 		self.relay = relay
 		self.rpc_bind = rpc_bind
 		self.state_interval = state_interval
+		
+		self.local_address = local_address
+		self.broker_addess = broker_address
 		
 		self.contex = zmq.asyncio.Context.instance()
 		self.router: Optional[zmq.asyncio.Socket] = None  # RPC server (ROUTER)
@@ -56,11 +59,12 @@ class RelayAgent:
 		# connect to broker RPC and say hello with the relay's endpoint
 		req = self.contex.socket(zmq.DEALER)
 		_curve_client_setup(req)
-		req.connect(BROKER_RPC)
+		broker_rpc_addr = BROKER_RPC.replace("BROKER", self.broker_addess)
+		req.connect(broker_rpc_addr)
 		self.dir_req = req
 		
 		# Try to render bind address for clients (replace * with host)
-		rpc_endpoint_public = self.rpc_bind.replace("*", "127.0.0.1")
+		rpc_endpoint_public = self.rpc_bind.replace("*", self.local_address)
 		await req.send(dumps({"type":"hello","role":"relay","relay_id": self.relay_id, "rpc_endpoint": rpc_endpoint_public}))
 		
 		#TODO: Use ACK message
@@ -127,14 +131,15 @@ class RelayAgent:
 		# Create publisher socket
 		p = self.contex.socket(zmq.PUB)
 		_curve_client_setup(p)
-		p.connect(STATE_PUB_CONNECT)
+		state_pub_addr = STATE_PUB_CONNECT.replace("BROKER", self.broker_addess)
+		p.connect(state_pub_addr)
 		self.pub = p
 		
 		# Prepare topic string from relay ID
 		topic = f"state.{self.relay_id}".encode("utf-8")
 		
 		# Print message
-		print(f"[relay:{self.relay_id}] periodically publishing state to {STATE_PUB_CONNECT} topic={topic.decode()}")
+		print(f"[relay:{self.relay_id}] periodically publishing state to {state_pub_addr} topic={topic.decode()}")
 		
 		# Main loop
 		while True:
