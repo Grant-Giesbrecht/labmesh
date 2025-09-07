@@ -9,8 +9,8 @@ from .util import dumps, loads
 from .util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
-BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://127.0.0.1:5750")
-BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://127.0.0.1:5751")
+BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://BROKER:5750")
+BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://BROKER:5751")
 
 DEFAULT_INGEST_BIND = os.environ.get("LMH_BANK_INGEST_BIND", "tcp://*:5761")
 DEFAULT_RETRIEVE_BIND = os.environ.get("LMH_BANK_RETRIEVE_BIND", "tcp://*:5762")
@@ -48,17 +48,19 @@ class DataBank:
 	  - get: {dataset_id} -> meta + chunk stream
 	"""
 	
-	def __init__(self, *, ingest_bind: str = DEFAULT_INGEST_BIND, retrieve_bind: str = DEFAULT_RETRIEVE_BIND, data_dir: str = DATA_DIR,
-				 broker_rpc: str = BROKER_RPC, broker_xsub: str = BROKER_XSUB, bank_id: str = BANK_ID):
+	def __init__(self, *, ingest_bind:str=DEFAULT_INGEST_BIND, retrieve_bind:str=DEFAULT_RETRIEVE_BIND, data_dir:str=DATA_DIR, broker_rpc:str=BROKER_RPC, broker_xsub:str=BROKER_XSUB, bank_id:str=BANK_ID, local_address:str="127.0.0.1", broker_address:str="127.0.0.1" ):
 		
 		# Create ZMQ context
 		self.contex = zmq.asyncio.Context.instance()
 		
+		self.local_address = local_address
+		self.broker_addess = broker_address
+		
 		# List socket addresses
 		self.ingest_bind = ingest_bind # ZMQ address - data I/O
 		self.retrieve_bind = retrieve_bind # ZMQ address - data I/O
-		self.broker_xsub = broker_xsub # Broker subscription socket
-		self.broker_rpc = broker_rpc # Broker RPC socket
+		self.broker_xsub = broker_xsub.replace("BROKER", self.broker_addess) # Broker subscription socket
+		self.broker_rpc = broker_rpc.replace("BROKER", self.broker_addess) # Broker RPC socket
 		
 		# Directory where data is stored 
 		self.data_dir = pathlib.Path(data_dir); self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -92,8 +94,8 @@ class DataBank:
 		
 		# Send hello message to broker, registering the bank
 		await req.send(dumps({"type":"hello","role":"bank","bank_id": self.bank_id,
-							  "ingest": self.ingest_bind.replace("*","127.0.0.1"),
-							  "retrieve": self.retrieve_bind.replace("*","127.0.0.1")}))
+							  "ingest": self.ingest_bind.replace("*",self.local_address),
+							  "retrieve": self.retrieve_bind.replace("*",self.local_address)}))
 		
 		# Receive response
 		# TODO: Do something with the acknowledgement

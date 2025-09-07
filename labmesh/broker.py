@@ -26,7 +26,7 @@ def _curve_server_setup(sock: zmq.Socket):
 class DirectoryBroker:
 	"""Presence + endpoint directory + XPUB/XSUB forwarder (no RPC routing)."""
 	
-	def __init__(self, *, rpc_bind: str = RPC_BIND, xsub_bind: str = XSUB_BIND, xpub_bind: str = XPUB_BIND):
+	def __init__(self, *, rpc_bind:str=RPC_BIND, xsub_bind:str=XSUB_BIND, xpub_bind:str=XPUB_BIND):
 		
 		# Create a ZMQ context
 		self.contex = zmq.asyncio.Context.instance()
