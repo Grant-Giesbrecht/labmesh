@@ -6,14 +6,14 @@ from typing import Dict, Any, Optional
 
 import zmq, zmq.asyncio
 
-from .util import dumps, loads
-from .util import ensure_windows_selector_loop
+from .util import dumps, loads, ensure_windows_selector_loop
 ensure_windows_selector_loop()
+# read_toml_config()
 
 # Ports to listen to (which is why no address is specified, just port #)
-RPC_BIND = os.environ.get("LMH_RPC_BIND", "tcp://*:5750")
-XSUB_BIND = os.environ.get("LMH_XSUB_BIND", "tcp://*:5751")
-XPUB_BIND = os.environ.get("LMH_XPUB_BIND", "tcp://*:5752")
+# RPC_BIND = os.environ.get("LMH_RPC_BIND", "tcp://*:5750")
+# XSUB_BIND = os.environ.get("LMH_XSUB_BIND", "tcp://*:5751")
+# XPUB_BIND = os.environ.get("LMH_XPUB_BIND", "tcp://*:5752")
 
 def _curve_server_setup(sock: zmq.Socket):
 	sec = os.environ.get("ZMQ_SERVER_SECRETKEY")
@@ -26,7 +26,8 @@ def _curve_server_setup(sock: zmq.Socket):
 class DirectoryBroker:
 	"""Presence + endpoint directory + XPUB/XSUB forwarder (no RPC routing)."""
 	
-	def __init__(self, *, rpc_bind:str=RPC_BIND, xsub_bind:str=XSUB_BIND, xpub_bind:str=XPUB_BIND):
+	# def __init__(self, *, rpc_bind:str=RPC_BIND, xsub_bind:str=XSUB_BIND, xpub_bind:str=XPUB_BIND):
+	def __init__(self, rpc_bind:str, xsub_bind:str, xpub_bind:str):
 		
 		# Create a ZMQ context
 		self.contex = zmq.asyncio.Context.instance()

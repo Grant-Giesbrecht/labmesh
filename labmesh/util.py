@@ -2,6 +2,18 @@
 from __future__ import annotations
 import json, os
 from typing import Any, Dict
+try:
+	import tomllib as toml  # py311+
+except Exception:
+	import tomli as toml
+
+def read_toml_config(filename:str):
+	
+	cfg = None
+	with open(cfg_path, "rb") as f:
+		cfg = toml.load(f)
+	
+	return cfg
 
 def ensure_windows_selector_loop():
 	import sys, asyncio

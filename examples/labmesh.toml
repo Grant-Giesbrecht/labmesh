@@ -1,0 +1,34 @@
+# Configuration file for application ports and addresses
+
+# ── Broker ────────────────────────────────────────────────────────────────────
+[broker]
+rpc_bind  = "tcp://*:5750"
+xsub_bind = "tcp://*:5751"   # relays'/banks' PUB connect here
+xpub_bind = "tcp://*:5752"   # clients' SUB connect here
+ttl_seconds = 30
+address = "127.0.0.1"
+
+# ── Relay ─────────────────────────────────────────────────────────────────────
+[relay]
+default_rpc_bind = "tcp://*:5850"      # Relay RPC server - each relay needs a different port!
+#state_interval = 1.0
+broker_rpc  = "tcp://BROKER:5750"
+broker_xsub = "tcp://BROKER:5751"
+heartbeat_seconds = 5
+upload_timeout  = 10
+upload_retries  = 5
+upload_chunk    = 1000000
+
+# ── Data bank ─────────────────────────────────────────────────────────────────
+[bank]
+ingest_bind   = "tcp://*:5761"  # drivers upload here
+retrieve_bind = "tcp://*:5762"  # clients download here
+default_data_dir = "./bank_data" # Makes most sense for each bank to explicitly set
+broker_rpc  = "tcp://BROKER:5750"
+broker_xsub = "tcp://BROKER:5751"
+heartbeat_seconds = 5
+
+# ── Client ────────────────────────────────────────────────────────────────────
+[client]
+broker_rpc = "tcp://BROKER:5750"
+broker_xpub = "tcp://BROKER:5752"

@@ -3,6 +3,16 @@ import asyncio, sys, time, random, os
 from typing import Dict, Any
 from labmesh import RelayAgent
 from labmesh.relay import upload_dataset
+from util import read_toml_config
+
+# Create a parser
+parser = argparse.ArgumentParser()
+p.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
+p.add_argument("--relay_id", help="Relay ID to use on the network.", default="Inst-0")
+args = p.parse_args(argv)
+
+# Read TOML file
+toml_data = read_toml_config("labmesh.toml")
 
 class MockPSU:
 	""" Dummy class to pretend to be a power supply unit. """
@@ -57,14 +67,14 @@ async def periodic_upload(relay_id: str):
 
 async def main():
 	
-	# Make a relay_id
-	relay_id = sys.argv[1] if len(sys.argv) > 1 else "psu-1"
-	
-	# Select a port to listen to, each driver needs a unique one
-	rpc_addr = sys.argv[2] if len(sys.argv) > 2 else "tcp://*:5850"
+	# # Make a relay_id
+	relay_id =  args.relay_id #sys.argv[1] if len(sys.argv) > 1 else "psu-1"
+	# 
+	# # Select a port to listen to, each driver needs a unique one
+	# rpc_addr = sys.argv[2] if len(sys.argv) > 2 else "tcp://*:5850"
 	
 	# Create the RelayAgent to connect to the network
-	agent = RelayAgent(relay_id, MockPSU(relay_id), state_interval=1.0, rpc_bind=rpc_addr)
+	agent = RelayAgent(relay_id, MockPSU(relay_id), broker_rpc=toml_data['relay']['broker_rpc'], state_interval=1.0, rpc_bind=rpc_addr, state_pub=toml_data['relay']['broker_xsub'])
 	
 	# Launch all tasks (RelayAgent's task's and periodic upload)
 	await asyncio.gather(agent.run(), periodic_upload(relay_id))

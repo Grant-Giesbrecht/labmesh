@@ -11,8 +11,8 @@ from .util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
 
-BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://BROKER:5750") # Broker's port that you connect to to say hello or run pings (?)
-BROKER_XPUB = os.environ.get("LMH_XPUB_CONNECT", "tcp://BROKER:5752")
+# BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://BROKER:5750") # Broker's port that you connect to to say hello or run pings (?)
+# BROKER_XPUB = os.environ.get("LMH_XPUB_CONNECT", "tcp://BROKER:5752")
 
 def _curve_client_setup(sock: zmq.Socket):
 	""" Sets up the socket `sock` with CURVE encryption.
@@ -122,12 +122,12 @@ class DirectorClientAgent:
 	like get_bank_agent() or get_relay_agent()`.
 	"""
 	
-	def __init__(self, broker_address:str="127.0.0.1"):
+	def __init__(self, broker_address:str, broker_rpc:str, broker_xpub:str):
 		
 		self.broker_address = broker_address
 		
-		self.broker_rpc = BROKER_RPC.replace("BROKER", self.broker_address)
-		self.broker_xpub = BROKER_XPUB.replace("BROKER", self.broker_address)
+		self.broker_rpc = broker_rpc.replace("BROKER", self.broker_address)
+		self.broker_xpub = broker_xpub.replace("BROKER", self.broker_address)
 		
 		# Create a ZMQ context
 		self.contex = zmq.asyncio.Context.instance()

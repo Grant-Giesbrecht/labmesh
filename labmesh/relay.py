@@ -5,17 +5,16 @@ import asyncio, os, time, uuid
 from typing import Any, Dict, Mapping, Optional
 
 import zmq, zmq.asyncio
-
 from .util import dumps, loads
 from .util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
-#TODO: Don't hardcode 127.0.0.1 (in many places)
-BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://BROKER:5750") # TODO: So the broker is at 127.0.0.1?
+
+# BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://BROKER:5750") # TODO: So the broker is at 127.0.0.1?
 BROKER_XSUB = os.environ.get("LMH_XSUB_CONNECT", "tcp://BROKER:5751")
 
-DEFAULT_RPC_BIND = os.environ.get("LMH_DRV_RPC_BIND", "tcp://*:5850")  # each relay will pick/override
-STATE_PUB_CONNECT = BROKER_XSUB
+# DEFAULT_RPC_BIND = os.environ.get("LMH_DRV_RPC_BIND", "tcp://*:5850")  # each relay will pick/override
+# STATE_PUB_CONNECT = BROKER_XSUB
 
 def _curve_server_setup(sock: zmq.Socket):
 	""" Configures CURVE for a sockets connecting to Broker for publishing"""
@@ -39,11 +38,13 @@ def _curve_client_setup(sock: zmq.Socket):
 class RelayAgent:
 	"""relay-side agent with direct RPC server and brokered events."""
 	
-	def __init__(self, relay_id:str, relay:Any, local_address:str="127.0.0.1", broker_address:str="127.0.0.1", rpc_bind:str=DEFAULT_RPC_BIND, state_interval:float=1.0):
+	def __init__(self, relay_id:str, relay:Any, broker_rpc:str, rpc_bind:str, state_pub:str, local_address:str="127.0.0.1", broker_address:str="127.0.0.1",  state_interval:float=1.0, ):
 		self.relay_id = relay_id
 		self.relay = relay
 		self.rpc_bind = rpc_bind
 		self.state_interval = state_interval
+		self.broker_rpc_raw = broker_rpc
+		self.state_pub_raw = state_pub
 		
 		self.local_address = local_address
 		self.broker_addess = broker_address
@@ -59,7 +60,7 @@ class RelayAgent:
 		# connect to broker RPC and say hello with the relay's endpoint
 		req = self.contex.socket(zmq.DEALER)
 		_curve_client_setup(req)
-		broker_rpc_addr = BROKER_RPC.replace("BROKER", self.broker_addess)
+		broker_rpc_addr = self.broker_rpc_raw.replace("BROKER", self.broker_addess)
 		req.connect(broker_rpc_addr)
 		self.dir_req = req
 		
@@ -131,7 +132,7 @@ class RelayAgent:
 		# Create publisher socket
 		p = self.contex.socket(zmq.PUB)
 		_curve_client_setup(p)
-		state_pub_addr = STATE_PUB_CONNECT.replace("BROKER", self.broker_addess)
+		state_pub_addr = self.state_pub_raw.replace("BROKER", self.broker_addess)
 		p.connect(state_pub_addr)
 		self.pub = p
 		
