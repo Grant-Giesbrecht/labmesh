@@ -5,23 +5,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "labmesh"
-version = "0.1.0"
-description = "Hybrid ZeroMQ: directory broker + direct RPC + XPUB/XSUB events + DataBank for bulk data"
+version = "0.0.0.dev0"
+description = "Hybrid ZeroMQ networking package for connecting lab instruments."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
 authors = [{name="You", email="you@example.com"}]
 dependencies = ["pyzmq>=25"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Topic :: Scientific/Engineering",
     "Framework :: AsyncIO"
 ]
+license = "BSD-2-Clause"
+license-files = ["LICENSE"]
 
 [project.urls]
-Homepage = "https://example.com/labmesh"
-
+Homepage = "https://github.com/Grant-Giesbrecht/labmesh"
+Issues = "https://github.com/Grant-Giesbrecht/labmesh/issues"
 
 [project.scripts]
-lmh-gen-curve = "labmesh.security:main"
+lm-keygen = "labmesh.security:main"
