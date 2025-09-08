@@ -5,8 +5,8 @@ from typing import Dict, Any, Optional, Tuple
 
 import zmq, zmq.asyncio
 
-from .util import dumps, loads
-from .util import ensure_windows_selector_loop
+from labmesh.util import dumps, loads
+from labmesh.util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
 # BROKER_RPC = os.environ.get("LMH_RPC_CONNECT", "tcp://BROKER:5750")

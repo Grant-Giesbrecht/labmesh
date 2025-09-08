@@ -1,13 +1,14 @@
 
 import asyncio
 from labmesh import DataBank
-from util import read_toml_config
+from labmesh.util import read_toml_config
+import argparse
 
 # Create a parser
 parser = argparse.ArgumentParser()
-p.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
-p.add_argument("--bank_id", help="Bank ID to use on the network.", default="bank-0")
-args = p.parse_args(argv)
+parser.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
+parser.add_argument("--bank_id", help="Bank ID to use on the network.", default="bank-0")
+args = parser.parse_args()
 
 # Read TOML file
 toml_data = read_toml_config("labmesh.toml")

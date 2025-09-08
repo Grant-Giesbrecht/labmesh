@@ -1,12 +1,13 @@
 
 import asyncio, os
 from labmesh import DirectorClientAgent, RelayClient
-from util import read_toml_config
+from labmesh.util import read_toml_config
+import argparse
 
 # Create a parser
 parser = argparse.ArgumentParser()
-p.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
-args = p.parse_args(argv)
+parser.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
+args = parser.parse_args()
 
 # Read TOML file
 toml_data = read_toml_config("labmesh.toml")
@@ -26,7 +27,7 @@ async def main():
 	
 	# Create a direct agent. This will create agent objects to
 	# talk to specific bank and relay objects.
-	client = DirectorClientAgent(broker_address=toml_data['broker']['address'], broker_rpc=toml_data['client']['broker_rpc'], broker_xpub=toml['client']['broker_xpub'])
+	client = DirectorClientAgent(broker_address=toml_data['broker']['address'], broker_rpc=toml_data['client']['broker_rpc'], broker_xpub=toml_data['client']['broker_xpub'])
 	await client.connect()
 	
 	# Print overview of all available services

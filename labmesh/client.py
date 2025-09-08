@@ -6,8 +6,8 @@ from typing import Any, Dict, Callable, Awaitable, Optional
 
 import zmq, zmq.asyncio
 
-from .util import dumps, loads
-from .util import ensure_windows_selector_loop
+from labmesh.util import dumps, loads
+from labmesh.util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
 

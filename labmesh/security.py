@@ -10,11 +10,11 @@ def generate_curve_keypair():
 
 def main(argv=None):
 	p = argparse.ArgumentParser(description="Generate ZeroMQ CURVE keypair")
-	p.add_argument("--format", choices=["env", "json", "toml"], default="env",
+	parser.add_argument("--format", choices=["env", "json", "toml"], default="env",
 				   help="Output format: env (default), json, or toml")
-	p.add_argument("--section", default="curve.server",
+	parser.add_argument("--section", default="curve.server",
 				   help="For --format toml: table path (e.g., broker.curve.server)")
-	args = p.parse_args(argv)
+	args = parser.parse_args(argv)
 	
 	pair = generate_curve_keypair()
 	

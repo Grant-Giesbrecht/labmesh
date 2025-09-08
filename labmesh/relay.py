@@ -5,8 +5,8 @@ import asyncio, os, time, uuid
 from typing import Any, Dict, Mapping, Optional
 
 import zmq, zmq.asyncio
-from .util import dumps, loads
-from .util import ensure_windows_selector_loop
+from labmesh.util import dumps, loads
+from labmesh.util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
 

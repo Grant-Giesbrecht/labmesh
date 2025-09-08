@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 import zmq, zmq.asyncio
 
-from .util import dumps, loads, ensure_windows_selector_loop
+from labmesh.util import dumps, loads, ensure_windows_selector_loop
 ensure_windows_selector_loop()
 # read_toml_config()
 

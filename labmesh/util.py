@@ -10,7 +10,7 @@ except Exception:
 def read_toml_config(filename:str):
 	
 	cfg = None
-	with open(cfg_path, "rb") as f:
+	with open(filename, "rb") as f:
 		cfg = toml.load(f)
 	
 	return cfg

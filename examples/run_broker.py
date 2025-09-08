@@ -2,12 +2,12 @@
 import asyncio
 from labmesh import DirectoryBroker
 import argparse
-from util import read_toml_config
+from labmesh.util import read_toml_config
 
 # Create a parser
 parser = argparse.ArgumentParser()
-p.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
-args = p.parse_args(argv)
+parser.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
+args = parser.parse_args()
 
 # Read TOML file
 toml_broker = read_toml_config("labmesh.toml")['broker']
