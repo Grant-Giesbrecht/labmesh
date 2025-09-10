@@ -87,6 +87,8 @@ class DataBank:
 	async def _register_with_broker(self):
 		""" Connect and register with broker. """
 		
+		print(f"Attempting to connect to broker at {self.broker_rpc}")
+		
 		# Setup the dealer style -> broker RPC socket
 		req = self.contex.socket(zmq.DEALER) # Dealer socket can send and receive
 		_curve_client_setup(req)
@@ -185,6 +187,8 @@ class DataBank:
 			
 			# Check if it's the first component of the data packet
 			if ingest_type == "ingest_start":
+				
+				print(f"Starting ingest")
 				
 				# Unpack packet
 				dataset_id = packet_data.get("dataset_id") or uuid.uuid4().hex # Get dataset id

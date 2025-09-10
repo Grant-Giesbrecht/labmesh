@@ -6,7 +6,7 @@ rpc_bind  = "tcp://*:5750"
 xsub_bind = "tcp://*:5751"   # relays'/banks' PUB connect here
 xpub_bind = "tcp://*:5752"   # clients' SUB connect here
 ttl_seconds = 30
-address = "127.0.0.1"
+address = "192.168.0.35"
 
 # ── Relay ─────────────────────────────────────────────────────────────────────
 [relay]
@@ -18,7 +18,7 @@ heartbeat_seconds = 5
 upload_timeout  = 10
 upload_retries  = 5
 upload_chunk    = 1000000
-default_address = "127.0.0.1"
+default_address = "192.168.0.25"
 
 # ── Data bank ─────────────────────────────────────────────────────────────────
 [bank]
@@ -28,10 +28,10 @@ default_data_dir = "./bank_data" # Makes most sense for each bank to explicitly 
 broker_rpc  = "tcp://BROKER:5750"
 broker_xsub = "tcp://BROKER:5751"
 heartbeat_seconds = 5
-default_address = "127.0.0.1"
+default_address = "192.168.0.25"
 
 # ── Client ────────────────────────────────────────────────────────────────────
 [client]
 broker_rpc = "tcp://BROKER:5750"
 broker_xpub = "tcp://BROKER:5752"
-default_address = "127.0.0.1"
+default_address = "192.168.0.25"

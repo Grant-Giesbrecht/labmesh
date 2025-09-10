@@ -43,12 +43,8 @@ class MockPSU:
 		self.current = round(self.voltage * (0.9 + 0.2 * random.random()), 4)
 		return self.get_state()
 
-async def periodic_upload(relay_id: str):
+async def periodic_upload(relay_id: str, ingest:str):
 	# pretend a big result every ~5s
-	
-	# Get databank ingest address
-	#TODO: This address should not be hardcoded
-	ingest = os.environ.get("LMH_BANK_INGEST_CONNECT", "tcp://127.0.0.1:5761")
 	
 	# Main loop
 	n = 0
@@ -64,7 +60,7 @@ async def periodic_upload(relay_id: str):
 		did = await upload_dataset(ingest, payload, relay_id=relay_id, meta={"note":"demo"})
 		
 		# Print confirmation
-		print(f"[relay:{relay_id}] uploaded dataset id={did}")
+		print(f"[relay:{relay_id}] uploaded dataset id={did} to {ingest}")
 		n += 1
 
 async def main():
@@ -78,10 +74,15 @@ async def main():
 		rpc_addr = toml_data['relay']['default_rpc_bind']
 	
 	# Create the RelayAgent to connect to the network
-	agent = RelayAgent(relay_id, MockPSU(relay_id), broker_rpc=toml_data['relay']['broker_rpc'], state_interval=1.0, rpc_bind=rpc_addr, state_pub=toml_data['relay']['broker_xsub'])
+	agent = RelayAgent(relay_id, MockPSU(relay_id), broker_rpc=toml_data['relay']['broker_rpc'], state_interval=1.0, rpc_bind=rpc_addr, state_pub=toml_data['relay']['broker_xsub'], local_address=toml_data['relay']['default_address'], broker_address=toml_data['broker']['address'])
+	
+	# Get databank ingest address
+	#TODO: This address should not be hardcoded
+	# ingest = os.environ.get("LMH_BANK_INGEST_CONNECT", "tcp://127.0.0.1:5761")
+	ingest = toml_data['bank']['ingest_bind'].replace("*", toml_data['bank']['default_address'])
 	
 	# Launch all tasks (RelayAgent's task's and periodic upload)
-	await asyncio.gather(agent.run(), periodic_upload(relay_id))
+	await asyncio.gather(agent.run(), periodic_upload(relay_id, ingest))
 
 if __name__ == "__main__":
 	

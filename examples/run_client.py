@@ -27,7 +27,7 @@ async def main():
 	
 	# Create a direct agent. This will create agent objects to
 	# talk to specific bank and relay objects.
-	client = DirectorClientAgent(broker_address=toml_data['broker']['address'], broker_rpc=toml_data['client']['broker_rpc'], broker_xpub=toml_data['client']['broker_xpub'])
+	client = DirectorClientAgent(broker_address=toml_data['broker']['address'], broker_rpc=toml_data['client']['broker_rpc'], broker_xpub=toml_data['client']['broker_xpub']) #, local_address=toml_data['client']['default_address'])
 	await client.connect()
 	
 	# Print overview of all available services
@@ -35,7 +35,7 @@ async def main():
 	print("Banks:", await client.list_banks())
 	
 	# Get the Relay agent for the specified relay-id
-	psu = await client.get_relay_agent("psu-1")
+	psu = await client.get_relay_agent("Inst-0")
 	
 	# Send a command to the remote instrument
 	await psu.set_voltage(value=2.5)

@@ -15,5 +15,5 @@ toml_data = read_toml_config("labmesh.toml")
 toml_bank = toml_data['bank']
 
 if __name__ == "__main__":
-	bank = DataBank(ingest_bind=toml_bank['ingest_bind'], retrieve_bind=toml_bank['retrieve_bind'], data_dir=toml_bank['default_data_dir'], broker_rpc=toml_bank['broker_rpc'], broker_xsub=toml_bank['broker_xsub'], bank_id=args.bank_id, heartbeat_sec=toml_bank['heartbeat_seconds'])
+	bank = DataBank(ingest_bind=toml_bank['ingest_bind'], retrieve_bind=toml_bank['retrieve_bind'], data_dir=toml_bank['default_data_dir'], broker_rpc=toml_bank['broker_rpc'], broker_xsub=toml_bank['broker_xsub'], bank_id=args.bank_id, heartbeat_sec=toml_bank['heartbeat_seconds'], broker_address=toml_data['broker']['address'], local_address=toml_bank['default_address'])
 	asyncio.run(bank.serve())
