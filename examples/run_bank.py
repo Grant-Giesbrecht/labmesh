@@ -11,7 +11,7 @@ parser.add_argument("--bank_id", help="Bank ID to use on the network.", default=
 args = parser.parse_args()
 
 # Read TOML file
-toml_data = read_toml_config("labmesh.toml")
+toml_data = read_toml_config(args.toml)
 toml_bank = toml_data['bank']
 
 if __name__ == "__main__":

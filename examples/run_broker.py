@@ -10,7 +10,7 @@ parser.add_argument("--toml", help="Set TOML configuration file", default="labme
 args = parser.parse_args()
 
 # Read TOML file
-toml_broker = read_toml_config("labmesh.toml")['broker']
+toml_broker = read_toml_config(args.toml)['broker']
 
 if __name__ == "__main__":
     broker = DirectoryBroker(toml_broker['rpc_bind'], toml_broker['xsub_bind'], toml_broker['xpub_bind'])

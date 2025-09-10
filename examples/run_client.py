@@ -10,7 +10,7 @@ parser.add_argument("--toml", help="Set TOML configuration file", default="labme
 args = parser.parse_args()
 
 # Read TOML file
-toml_data = read_toml_config("labmesh.toml")
+toml_data = read_toml_config(args.toml)
 
 class PSUClient(RelayClient):
 	""" Dummy class for PSU to operate on client side.

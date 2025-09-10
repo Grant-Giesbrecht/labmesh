@@ -14,7 +14,7 @@ parser.add_argument("--rpc", help="RPC port", default="")
 args = parser.parse_args()
 
 # Read TOML file
-toml_data = read_toml_config("labmesh.toml")
+toml_data = read_toml_config(args.toml)
 
 class MockPSU:
 	""" Dummy class to pretend to be a power supply unit. """
