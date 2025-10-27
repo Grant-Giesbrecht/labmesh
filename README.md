@@ -2,7 +2,7 @@
 <img src="https://github.com/Grant-Giesbrecht/labmesh/blob/main/docs/images/labmesh.png?raw=True" width="500">
 </h1><br>
 
-Mesh networking package using ZeroMQ specifically designed for constellation.
+Mesh networking package using ZeroMQ specifically designed for [constellation](https://github.com/Grant-Giesbrecht/constellation).
 
 ## How It Works
 
