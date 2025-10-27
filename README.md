@@ -1,4 +1,7 @@
-# labmesh
+<h1 align="center">
+<img src="https://github.com/Grant-Giesbrecht/labmesh/blob/main/docs/images/labmesh.png?raw=True" width="500">
+</h1><br>
+
 Mesh networking package using ZeroMQ specifically designed for constellation.
 
 ## How It Works
@@ -255,3 +258,30 @@ async def main():
 if __name__ == "__main__":
 	asyncio.run(main())
 ```
+
+### Creating a Databank
+
+The databank, similar to the broker, also has little to do outside of reading a config script.
+
+``` Python
+
+import asyncio
+from labmesh import DataBank
+from labmesh.util import read_toml_config
+import argparse
+
+# Create a parser
+parser = argparse.ArgumentParser()
+parser.add_argument("--toml", help="Set TOML configuration file", default="labmesh.toml")
+parser.add_argument("--bank_id", help="Bank ID to use on the network.", default="bank-0")
+args = parser.parse_args()
+
+# Read TOML file
+toml_data = read_toml_config(args.toml)
+toml_bank = toml_data['bank']
+
+if __name__ == "__main__":
+	bank = DataBank(ingest_bind=toml_bank['ingest_bind'], retrieve_bind=toml_bank['retrieve_bind'], data_dir=toml_bank['default_data_dir'], broker_rpc=toml_bank['broker_rpc'], broker_xsub=toml_bank['broker_xsub'], bank_id=args.bank_id, heartbeat_sec=toml_bank['heartbeat_seconds'], broker_address=toml_data['broker']['address'], local_address=toml_bank['default_address'])
+	asyncio.run(bank.serve())
+```
+
