@@ -9,7 +9,7 @@ version = "0.0.0.dev0"
 description = "Hybrid ZeroMQ networking package for connecting lab instruments."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{name="You", email="you@example.com"}]
+authors = [{name="Grant Giesbrecht", email="giesbrechtgrant@gmail.com"}]
 dependencies = ["pyzmq>=25"]
 classifiers = [
     "Programming Language :: Python :: 3",
