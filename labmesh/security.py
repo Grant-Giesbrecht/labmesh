@@ -9,7 +9,7 @@ def generate_curve_keypair():
 	return {"public": public.decode(), "secret": secret.decode()}
 
 def main(argv=None):
-	p = argparse.ArgumentParser(description="Generate ZeroMQ CURVE keypair")
+	parser = argparse.ArgumentParser(description="Generate ZeroMQ CURVE keypair")
 	parser.add_argument("--format", choices=["env", "json", "toml"], default="env",
 				   help="Output format: env (default), json, or toml")
 	parser.add_argument("--section", default="curve.server",

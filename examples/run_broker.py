@@ -2,7 +2,7 @@
 import asyncio
 from labmesh import DirectoryBroker
 import argparse
-from labmesh.util import read_toml_config
+from labmesh.util import read_toml_config, prompt_network_password
 
 # Create a parser
 parser = argparse.ArgumentParser()
@@ -13,5 +13,6 @@ args = parser.parse_args()
 toml_broker = read_toml_config(args.toml)['broker']
 
 if __name__ == "__main__":
+    prompt_network_password(confirm=True)
     broker = DirectoryBroker(toml_broker['rpc_bind'], toml_broker['xsub_bind'], toml_broker['xpub_bind'])
     asyncio.run(broker.serve())

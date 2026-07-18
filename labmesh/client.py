@@ -6,7 +6,7 @@ from typing import Any, Dict, Callable, Awaitable, Optional
 
 import zmq, zmq.asyncio
 
-from labmesh.util import dumps, loads
+from labmesh.util import dumps, loads, network_password
 from labmesh.util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
@@ -22,9 +22,9 @@ def _curve_client_setup(sock: zmq.Socket):
 	cpub = os.environ.get("ZMQ_CLIENT_PUBLICKEY")
 	spub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if csec and cpub and spub:
-		sock.curve_secretkey = csec
-		sock.curve_publickey = cpub
-		sock.curve_serverkey = spub
+		sock.curve_secretkey = csec.encode()
+		sock.curve_publickey = cpub.encode()
+		sock.curve_serverkey = spub.encode()
 
 class RelayClient:
 	""" Agent class to talk to a specific relay.
@@ -53,7 +53,7 @@ class RelayClient:
 		rpc_uuid = uuid.uuid4().hex
 		
 		# Send message packet
-		await self.req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params}))
+		await self.req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params,"password":network_password()}))
 		
 		# Continue looping until the appropriate return message is received
 		while True:
@@ -96,7 +96,7 @@ class BankClient:
 
 	async def download(self, dataset_id: str, dest_path: str, *, chunk_cb: Optional[Callable[[int], None]]=None, timeout: float = 60.0) -> Dict[str, Any]:
 		assert self.req is not None
-		await self.req.send(dumps({"type":"get","dataset_id": dataset_id}))
+		await self.req.send(dumps({"type":"get","dataset_id": dataset_id,"password":network_password()}))
 		meta = loads(await asyncio.wait_for(self.req.recv(), timeout=timeout))
 		if meta.get("type") != "meta":
 			raise RuntimeError(f"unexpected: {meta}")
@@ -154,7 +154,7 @@ class DirectorClientAgent:
 		self.sub = sub
 		
 		# Register with the broker
-		await req.send(dumps({"type":"hello","role":"client"}))
+		await req.send(dumps({"type":"hello","role":"client","password":network_password()}))
 		_ = await req.recv() #TODO: Do things with the return data and ensure the connection was successful
 		
 		# Begin the listener for publish and dataset events
@@ -236,7 +236,7 @@ class DirectorClientAgent:
 		rpc_uuid = uuid.uuid4().hex
 		
 		# Send packet
-		await self.dir_req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params or {}}))
+		await self.dir_req.send(dumps({"type":"rpc","rpc_uuid":rpc_uuid,"method":method,"params":params or {},"password":network_password()}))
 		
 		# Continue reading messages until the message with the correct UUID returns
 		while True:

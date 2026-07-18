@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, Tuple
 
 import zmq, zmq.asyncio
 
-from labmesh.util import dumps, loads
+from labmesh.util import dumps, loads, network_password, check_password
 from labmesh.util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
@@ -25,7 +25,7 @@ def _curve_server_setup(sock: zmq.Socket):
 	sec = os.environ.get("ZMQ_SERVER_SECRETKEY")
 	pub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if sec and pub:
-		sock.curve_secretkey = sec; sock.curve_publickey = pub; sock.curve_server = True
+		sock.curve_secretkey = sec.encode(); sock.curve_publickey = pub.encode(); sock.curve_server = True
 
 def _curve_client_setup(sock: zmq.Socket):
 	# TODO: Document key requirements
@@ -34,7 +34,7 @@ def _curve_client_setup(sock: zmq.Socket):
 	cpub = os.environ.get("ZMQ_CLIENT_PUBLICKEY")
 	spub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if csec and cpub and spub:
-		sock.curve_secretkey = csec; sock.curve_publickey = cpub; sock.curve_serverkey = spub
+		sock.curve_secretkey = csec.encode(); sock.curve_publickey = cpub.encode(); sock.curve_serverkey = spub.encode()
 
 class DataBank:
 	"""Accepts dataset uploads and serves downloads (with checksum verification).
@@ -98,7 +98,8 @@ class DataBank:
 		# Send hello message to broker, registering the bank
 		await req.send(dumps({"type":"hello","role":"bank","bank_id": self.bank_id,
 							  "ingest": self.ingest_bind.replace("*",self.local_address),
-							  "retrieve": self.retrieve_bind.replace("*",self.local_address)}))
+							  "retrieve": self.retrieve_bind.replace("*",self.local_address),
+							  "password": network_password()}))
 		
 		# Receive response
 		# TODO: Do something with the acknowledgement
@@ -189,7 +190,13 @@ class DataBank:
 			if ingest_type == "ingest_start":
 				
 				print(f"Starting ingest")
-				
+
+				# Reject uploads that don't carry the correct shared network password.
+				expected = network_password()
+				if expected and not check_password(packet_data, expected):
+					await in_router.send_multipart([ident, dumps({"type":"error","error":{"code":401,"message":"invalid password"}})])
+					continue
+
 				# Unpack packet
 				dataset_id = packet_data.get("dataset_id") or uuid.uuid4().hex # Get dataset id
 				rid = packet_data.get("relay_id") or "unknown" # Get relay id
@@ -319,7 +326,13 @@ class DataBank:
 				await r.send_multipart([ident, dumps({"type":"error","error":{"code":400,"message":"expected get"}})])
 				# Resume main loop
 				continue
-			
+
+			# Reject downloads that don't carry the correct shared network password.
+			expected = network_password()
+			if expected and not check_password(packet_data, expected):
+				await r.send_multipart([ident, dumps({"type":"error","error":{"code":401,"message":"invalid password"}})])
+				continue
+
 			# Else get dataset id
 			dataset_id = packet_data.get("dataset_id")
 			

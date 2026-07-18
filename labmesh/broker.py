@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 import zmq, zmq.asyncio
 
-from labmesh.util import dumps, loads, ensure_windows_selector_loop
+from labmesh.util import dumps, loads, ensure_windows_selector_loop, network_password, check_password
 ensure_windows_selector_loop()
 # read_toml_config()
 
@@ -19,8 +19,8 @@ def _curve_server_setup(sock: zmq.Socket):
 	sec = os.environ.get("ZMQ_SERVER_SECRETKEY")
 	pub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if sec and pub:
-		sock.curve_secretkey = sec
-		sock.curve_publickey = pub
+		sock.curve_secretkey = sec.encode()
+		sock.curve_publickey = pub.encode()
 		sock.curve_server = True
 
 class DirectoryBroker:
@@ -119,7 +119,18 @@ class DirectoryBroker:
 			ident, payload = await router.recv_multipart()
 			msg = loads(payload)
 			msg_type = msg.get("type")
-			
+
+			# Reject hello/rpc messages that don't carry the correct shared network password.
+			# (No check if the broker itself has no password configured - auth is opt-in.)
+			if msg_type in ("hello", "rpc"):
+				expected = network_password()
+				if expected and not check_password(msg, expected):
+					if msg_type == "hello":
+						await router.send_multipart([ident, dumps({"type":"hello","ok":False,"error":"invalid password"})])
+					else:
+						await router.send_multipart([ident, dumps({"type":"rpc_error","rpc_uuid":msg.get("rpc_uuid"),"error":{"code":401,"message":"invalid password"}})])
+					continue
+
 			# Process `intake` messages
 			if msg_type == "hello":
 				

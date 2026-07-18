@@ -5,7 +5,7 @@ import asyncio, os, time, uuid
 from typing import Any, Dict, Mapping, Optional
 
 import zmq, zmq.asyncio
-from labmesh.util import dumps, loads
+from labmesh.util import dumps, loads, network_password, check_password
 from labmesh.util import ensure_windows_selector_loop
 ensure_windows_selector_loop()
 
@@ -21,8 +21,8 @@ def _curve_server_setup(sock: zmq.Socket):
 	sec = os.environ.get("ZMQ_SERVER_SECRETKEY")
 	pub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if sec and pub:
-		sock.curve_secretkey = sec
-		sock.curve_publickey = pub
+		sock.curve_secretkey = sec.encode()
+		sock.curve_publickey = pub.encode()
 		sock.curve_server = True
 
 def _curve_client_setup(sock: zmq.Socket):
@@ -31,9 +31,9 @@ def _curve_client_setup(sock: zmq.Socket):
 	cpub = os.environ.get("ZMQ_CLIENT_PUBLICKEY")
 	spub = os.environ.get("ZMQ_SERVER_PUBLICKEY")
 	if csec and cpub and spub:
-		sock.curve_secretkey = csec
-		sock.curve_publickey = cpub
-		sock.curve_serverkey = spub
+		sock.curve_secretkey = csec.encode()
+		sock.curve_publickey = cpub.encode()
+		sock.curve_serverkey = spub.encode()
 
 class RelayAgent:
 	"""relay-side agent with direct RPC server and brokered events."""
@@ -66,7 +66,7 @@ class RelayAgent:
 		
 		# Try to render bind address for clients (replace * with host)
 		rpc_endpoint_public = self.rpc_bind.replace("*", self.local_address)
-		await req.send(dumps({"type":"hello","role":"relay","relay_id": self.relay_id, "rpc_endpoint": rpc_endpoint_public}))
+		await req.send(dumps({"type":"hello","role":"relay","relay_id": self.relay_id, "rpc_endpoint": rpc_endpoint_public, "password": network_password()}))
 		
 		#TODO: Use ACK message
 		_ = await req.recv() 
@@ -97,7 +97,13 @@ class RelayAgent:
 			rid = msg.get("rpc_uuid")
 			method = msg.get("method")
 			params = msg.get("params") or {}
-			
+
+			# Reject calls that don't carry the correct shared network password.
+			expected = network_password()
+			if expected and not check_password(msg, expected):
+				await r.send_multipart([ident, dumps({"type":"rpc_error","rpc_uuid":rid,"error":{"code":401,"message":"invalid password"}})])
+				continue
+
 			# Attempt to execute
 			try:
 				
@@ -186,7 +192,7 @@ async def upload_dataset(bank_ingest_endpoint: str, dataset_bytes: bytes, *, dat
 	did = dataset_id or uuid.uuid4().hex
 	
 	# Send ingest start
-	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "relay_id": relay_id, "meta": meta or {}}))
+	await dealer.send(dumps({"type":"ingest_start","dataset_id": did, "relay_id": relay_id, "meta": meta or {}, "password": network_password()}))
 	
 	# TODO: Do something with the ack message
 	_ = await dealer.recv()  # ack

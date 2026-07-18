@@ -25,3 +25,12 @@ Issues = "https://github.com/Grant-Giesbrecht/labmesh/issues"
 
 [project.scripts]
 lm-keygen = "labmesh.security:main"
+
+[project.optional-dependencies]
+test = ["pytest>=7.4", "pytest-asyncio>=0.23", "pytest-timeout>=2.2"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+timeout = 30
+timeout_method = "thread"
